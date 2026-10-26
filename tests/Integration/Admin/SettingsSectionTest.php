@@ -82,6 +82,36 @@ class SettingsSectionTest extends IntegrationTestCase {
 		$this->assertSame( 'USD', $s->report_currency() );
 	}
 
+	public function test_saving_stores_the_registration_field_and_the_exempt_roles(): void {
+		$this->save(
+			array(
+				'registration_vat_field' => 'yes',
+				'exempt_roles'           => array( 'customer', 'no_such_role' ),
+			)
+		);
+		$this->assertTrue( Settings::get()->registration_vat_field() );
+		$this->assertSame( array( 'customer' ), Settings::get()->exempt_roles() );
+
+		$this->save( array() );
+		$this->assertFalse( Settings::get()->registration_vat_field() );
+		$this->assertSame( array(), Settings::get()->exempt_roles(), 'Selecting no role clears the list' );
+	}
+
+	public function test_exempt_roles_field_lists_roles_and_warns_it_is_not_a_legal_basis(): void {
+		update_option( Settings::OPTION, array( 'exempt_roles' => array( 'customer' ) ) );
+		Settings::reset();
+
+		ob_start();
+		WC_Admin_Settings::output_fields( $this->section->fields() );
+		$html = (string) ob_get_clean();
+
+		$this->assertMatchesRegularExpression( '/<select[^>]+name="vatright_settings\[exempt_roles\]\[\]"[^>]+multiple/s', $html );
+		$this->assertMatchesRegularExpression( '/<option value="customer"\s+selected=\'selected\'/', $html );
+		$this->assertStringContainsString( 'not a basis for VAT exemption', $html );
+		$this->assertStringContainsString( 'responsible', $html );
+		$this->assertStringContainsString( 'vatright_settings[registration_vat_field]', $html );
+	}
+
 	public function test_hmrc_secret_is_never_rendered(): void {
 		$this->save(
 			array(
@@ -147,6 +177,13 @@ class SettingsSectionTest extends IntegrationTestCase {
 		$this->assertFalse( Settings::get()->self_certification() );
 	}
 
+	public function test_required_confirmation_saves_and_unticks(): void {
+		$this->save( array( 'self_certification_required' => 'yes' ) );
+		$this->assertTrue( Settings::get()->self_certification_required() );
+		$this->save( array() );
+		$this->assertFalse( Settings::get()->self_certification_required() );
+	}
+
 	public function test_numbers_are_clamped(): void {
 		$this->save(
 			array(
@@ -156,6 +193,47 @@ class SettingsSectionTest extends IntegrationTestCase {
 		);
 		$this->assertSame( 1, Settings::get()->cache_ttl_valid_days() );
 		$this->assertSame( 30, Settings::get()->retention_years() );
+	}
+
+	public function test_b2b_only_settings_are_saved(): void {
+		$this->save(
+			array(
+				'b2b_only'           => 'countries',
+				'b2b_only_countries' => array( 'DE', 'FR' ),
+			)
+		);
+		$this->assertSame( 'countries', Settings::get()->b2b_only() );
+		$this->assertSame( array( 'DE', 'FR' ), Settings::get()->b2b_only_countries() );
+	}
+
+	public function test_unknown_b2b_only_mode_is_not_stored(): void {
+		$this->save( array( 'b2b_only' => 'nonsense' ) );
+		$this->assertSame( 'off', Settings::get()->b2b_only() );
+	}
+
+	public function test_b2b_only_help_text_explains_the_outage_policy_interaction(): void {
+		ob_start();
+		WC_Admin_Settings::output_fields( $this->section->fields() );
+		$html = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'vatright_settings[b2b_only]', $html );
+		$this->assertStringContainsString( 'vatright_settings[b2b_only_countries][]', $html );
+		$this->assertStringContainsString( 'When a registry is unavailable', $html );
+		$this->assertStringContainsString( 'never accepted unchecked', $html );
+	}
+
+	public function test_threshold_warning_percent_is_a_clamped_number_field(): void {
+		$ids = array_column( $this->section->fields(), 'id' );
+		$this->assertContains( Settings::OPTION . '[threshold_warning_percent]', $ids );
+
+		$this->save( array( 'threshold_warning_percent' => '65' ) );
+		$this->assertSame( 65, Settings::get()->threshold_warning_percent() );
+
+		$this->save( array( 'threshold_warning_percent' => '250' ) );
+		$this->assertSame( 99, Settings::get()->threshold_warning_percent() );
+
+		$this->save( array( 'threshold_warning_percent' => '0' ) );
+		$this->assertSame( 1, Settings::get()->threshold_warning_percent() );
 	}
 
 	public function test_unknown_outage_policy_is_not_stored(): void {

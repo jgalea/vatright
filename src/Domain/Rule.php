@@ -21,4 +21,5 @@ final class Rule {
 	const PENDING_REJECTED           = 'PENDING_REJECTED';
 	const INVALID_NUMBER             = 'INVALID_NUMBER';
 	const NON_EU_NUMBER_RECORDED     = 'NON_EU_NUMBER_RECORDED';
+	const ROLE_EXEMPT                = 'ROLE_EXEMPT';
 }

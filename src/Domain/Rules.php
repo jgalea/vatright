@@ -19,6 +19,7 @@ final class Rules {
 		Rule::RC_SERVICES_ART196,
 		Rule::DOMESTIC_B2B_ALLOWED,
 		Rule::PENDING_EXEMPT,
+		Rule::ROLE_EXEMPT,
 	);
 
 	/**
@@ -40,6 +41,7 @@ final class Rules {
 		Rule::RC_SERVICES_ART196,
 		Rule::PENDING_EXEMPT,
 		Rule::DOMESTIC_B2B_ALLOWED,
+		Rule::ROLE_EXEMPT,
 		Rule::OUTSIDE_TERRITORY,
 		Rule::NON_EU_NUMBER_RECORDED,
 		Rule::EXPORT_NON_EU,
@@ -65,7 +67,7 @@ final class Rules {
 	public function decide( DecisionInput $in ): Decision {
 		$results = array();
 		foreach ( $in->lines() as $line ) {
-			$results[] = $this->decide_line( $in, $line );
+			$results[] = $this->apply_role_exemption( $in, $this->decide_line( $in, $line ) );
 		}
 
 		$exempt = $this->all_taxable_lines_exempt( $results );
@@ -92,7 +94,7 @@ final class Rules {
 					'postcode' => $in->shipping_postcode(),
 				),
 				'local_pickup' => $in->local_pickup(),
-			),
+			) + ( array() === $in->exempt_roles() ? array() : array( 'exempt_roles' => $in->exempt_roles() ) ),
 			$this->vat_number_section( $in ),
 			null === $in->validation() ? null : $in->validation()->to_array(),
 			$this->evidence_section( $in->evidence() ),
@@ -150,6 +152,27 @@ final class Rules {
 			return $this->business_line( $in, $line, $country, $number );
 		}
 		return $this->consumer_line( $in, $line, $country, null );
+	}
+
+	/**
+	 * The merchant's role exemption stands behind every other treatment: a
+	 * line that is already untaxed or exempt on its own legal basis keeps it,
+	 * and a taxed line becomes exempt because of the customer's role. Whatever
+	 * made the line taxed, such as an unchecked VAT number, no longer matters.
+	 *
+	 * @param LineResult $r
+	 * @return LineResult
+	 */
+	private function apply_role_exemption( DecisionInput $in, array $r ): array {
+		if ( array() === $in->exempt_roles() || in_array( $r['scheme'], array( Scheme::EXPORT, Scheme::OUTSIDE_TERRITORY ), true ) || in_array( $r['rule'], self::EXEMPT_RULES, true ) ) {
+			return $r;
+		}
+		$r['rule']     = Rule::ROLE_EXEMPT;
+		$r['scheme']   = Scheme::ROLE_EXEMPT;
+		$r['evidence'] = false;
+		$r['blocking'] = null;
+		$r['flags']    = array();
+		return $r;
 	}
 
 	/**

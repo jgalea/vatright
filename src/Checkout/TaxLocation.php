@@ -30,6 +30,7 @@ final class TaxLocation {
 		Scheme::OUTSIDE_TERRITORY,
 		Scheme::REVERSE_CHARGE_SERVICES,
 		Scheme::INTRA_EU_GOODS,
+		Scheme::ROLE_EXEMPT,
 	);
 
 	public static function charges_line( LineDecision $line ): bool {

@@ -2,11 +2,14 @@
 
 namespace Vatright\Checkout;
 
+use Vatright\Domain\B2bScope;
 use Vatright\Domain\FormatCheck;
+use Vatright\Domain\Territory;
 use Vatright\Domain\ValidationResult;
 use Vatright\Domain\VatNumber;
 use Vatright\Plugin;
 use Vatright\Registry\Validator;
+use Vatright\Settings;
 use WC_Customer;
 use WC_Data;
 use WP_Error;
@@ -80,10 +83,12 @@ class VatField {
 
 		add_filter( 'woocommerce_billing_fields', array( $this, 'add_classic_field' ) );
 		add_filter( 'woocommerce_form_field', array( $this, 'add_classic_disclosure' ), 10, 2 );
+		add_filter( 'woocommerce_form_field', array( $this, 'mark_classic_required' ), 11, 2 );
 		add_filter( 'woocommerce_checkout_get_value', array( $this, 'classic_default' ), 10, 2 );
 		add_action( 'woocommerce_checkout_update_order_review', array( $this, 'on_update_order_review' ) );
 		add_filter( 'woocommerce_checkout_posted_data', array( $this, 'on_posted_data' ) );
 		add_action( 'woocommerce_checkout_create_order', array( $this, 'copy_to_order' ), 5 );
+		add_action( 'woocommerce_checkout_update_user_meta', array( $this, 'copy_to_new_account' ) );
 		add_action( 'woocommerce_review_order_before_order_total', array( $this, 'render_classic_notice' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_classic_script' ) );
 
@@ -101,7 +106,7 @@ class VatField {
 				'label'                      => __( 'VAT number', 'vatright' ),
 				'location'                   => 'contact',
 				'type'                       => 'text',
-				'required'                   => false,
+				'required'                   => self::block_required(),
 				// InvoiceText adds the number to the order totals, which every order shows.
 				'show_in_order_confirmation' => false,
 				'hidden'                     => array(
@@ -127,6 +132,48 @@ class VatField {
 				'sanitize_callback'          => array( self::class, 'normalise' ),
 				'validate_callback'          => array( $this, 'validate_block_value' ),
 			)
+		);
+	}
+
+	/**
+	 * Business-only mode makes the number mandatory in the countries it
+	 * covers. WooCommerce evaluates this schema against the checkout, so the
+	 * block field gains or loses its "(optional)" label as the billing country
+	 * changes. An empty field is then refused by WooCommerce before checkout.
+	 *
+	 * @return bool|array<string,mixed>
+	 */
+	public static function block_required() {
+		$settings = Settings::get();
+		switch ( $settings->b2b_only() ) {
+			case B2bScope::EVERYWHERE:
+				$countries = self::COUNTRIES;
+				break;
+			case B2bScope::EU:
+				$countries = Territory::EU;
+				break;
+			case B2bScope::COUNTRIES:
+				$countries = array_map( 'strtoupper', $settings->b2b_only_countries() );
+				break;
+			default:
+				return false;
+		}
+		return array(
+			'type'       => 'object',
+			'required'   => array( 'customer' ),
+			'properties' => array(
+				'customer' => array(
+					'required'   => array( 'billing_address' ),
+					'properties' => array(
+						'billing_address' => array(
+							'required'   => array( 'country' ),
+							'properties' => array(
+								'country' => array( 'enum' => array_values( $countries ) ),
+							),
+						),
+					),
+				),
+			),
 		);
 	}
 
@@ -224,6 +271,38 @@ class VatField {
 	}
 
 	/**
+	 * Business-only mode refuses an empty field with its own message, so the
+	 * field stays optional to WooCommerce and only looks required. The script
+	 * keeps the label in step with the billing country.
+	 *
+	 * @param string $html
+	 * @param string $key
+	 */
+	public function mark_classic_required( $html, $key ): string {
+		$html = (string) $html;
+		if ( self::CLASSIC_FIELD !== $key || ! WC()->customer instanceof WC_Customer || ! B2bOnly::applies( WC()->customer->get_billing_country() ) ) { // @phpstan-ignore instanceof.alwaysTrue
+			return $html;
+		}
+		$required = esc_attr__( 'required', 'woocommerce' ); // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- the label wording WooCommerce itself uses.
+		$html     = preg_replace( '#<span class="optional">[^<]*</span>#', '<abbr class="required" title="' . $required . '">*</abbr>', $html, 1 ) ?? $html;
+		return str_replace( 'form-row ', 'form-row validate-required ', $html );
+	}
+
+	/**
+	 * @return array{mode:string,countries:string[],eu:string[],optional:string,required:string}
+	 */
+	private static function classic_script_data(): array {
+		$settings = Settings::get();
+		return array(
+			'mode'      => $settings->b2b_only(),
+			'countries' => $settings->b2b_only_countries(),
+			'eu'        => Territory::EU,
+			'optional'  => esc_html__( 'optional', 'woocommerce' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- the label wording WooCommerce itself uses.
+			'required'  => esc_attr__( 'required', 'woocommerce' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- the label wording WooCommerce itself uses.
+		);
+	}
+
+	/**
 	 * @param mixed  $value
 	 * @param string $input
 	 * @return mixed
@@ -266,6 +345,19 @@ class VatField {
 		}
 	}
 
+	/**
+	 * An account created at checkout is a new customer record, so the number
+	 * the visitor typed, held on the session customer, has to be copied over.
+	 *
+	 * @param mixed $user_id
+	 */
+	public function copy_to_new_account( $user_id ): void {
+		$number = WC()->customer instanceof WC_Customer ? (string) WC()->customer->get_meta( InputGatherer::NUMBER_META ) : ''; // @phpstan-ignore instanceof.alwaysTrue
+		if ( '' !== $number && '' === (string) get_user_meta( (int) $user_id, InputGatherer::NUMBER_META, true ) ) {
+			update_user_meta( (int) $user_id, InputGatherer::NUMBER_META, $number );
+		}
+	}
+
 	public function render_classic_notice(): void {
 		$decision = Plugin::cart_steering() ? Plugin::cart_steering()->current() : null;
 		$status   = StoreApiExtension::status( $decision );
@@ -291,6 +383,7 @@ class VatField {
 		}
 		$script = self::asset( 'assets/classic-checkout.js' );
 		wp_enqueue_script( 'vatright-classic-checkout', $script['url'], array( 'jquery', 'wc-checkout' ), $script['version'], true );
+		wp_localize_script( 'vatright-classic-checkout', 'vatrightB2b', self::classic_script_data() );
 		$style = self::asset( 'assets/checkout-block/style.css' );
 		wp_enqueue_style( 'vatright-checkout', $style['url'], array(), $style['version'] );
 	}

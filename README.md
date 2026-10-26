@@ -12,12 +12,18 @@
 The plugin decides the VAT treatment of each order, applies it through WooCommerce's own tax calculation and stores the decision, with its inputs, on the order.
 
 - VAT number field on the block checkout, classic checkout, My Account and the admin order screen, checked against VIES (EU), HMRC (GB, with your own credentials), the Swiss UID register and the Brønnøysund register (Norway).
+- Optional VAT number field on the My Account registration form (off by default), checked by the same registry pipeline. A registry outage never blocks registration.
+- Per-role VAT exemption (no roles by default), recorded on the order as its own rule. A role isn't a legal basis for exemption on its own, so correctness is up to the merchant.
 - Reverse charge for valid B2B numbers, with the required wording on the order, emails and invoice text.
 - Origin VAT below the EUR 10,000 OSS threshold, destination VAT above it, switching automatically.
-- Digital goods use location evidence, with an optional self-certification step when it conflicts.
+- Digital goods use location evidence, with a self-certification prompt when it conflicts. An optional setting blocks checkout until the customer confirms their country, on both the block and classic checkout.
 - Standard and reduced rates imported from the EU's TEDB, with a diff before anything changes.
 - Outage policy: by default an unavailable registry means the order is accepted, VAT is charged and the order is flagged and re-checked later.
+- VAT column on the orders list (number, validation status, treatment) with a pending/flagged filter, on HPOS and legacy orders.
+- Admin email when cross-border EU consumer sales reach a share of the OSS threshold (80% by default) and again when they pass it.
 - OSS return and EC Sales List reports with CSV export, plus REST endpoints.
+- Optional business-only mode that requires a valid VAT number at checkout, everywhere, in the EU or in chosen countries.
+- Monthly INTRASTAT dispatch report for physical goods, with per-product CN8 code, country of origin and net mass, and CSV export.
 - Personal data exporters, erasers and a retention setting.
 
 Settings are under WooCommerce > Settings > Tax > VAT Right. `readme.txt` has the FAQ and the list of external services the plugin calls.

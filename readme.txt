@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.4
+Stable tag: 0.1.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -20,15 +20,21 @@ Settings live under WooCommerce > Settings > Tax > VAT Right.
 **What it does**
 
 * Adds a VAT number field to the block checkout, the classic checkout, My Account and the admin order screen. Numbers are checked for format first, then against the official registry.
+* An optional VAT number field on the My Account registration form (off by default), checked by the same registry pipeline. A registry outage never blocks registration.
+* Per-role VAT exemption (no roles by default): orders from customers with a role you choose are exempt, with the role recorded on the order. A role isn't a legal basis for exemption on its own, so correctness is up to you.
 * Registries: VIES for EU numbers, HMRC for GB numbers (needs your own free HMRC developer credentials, see the FAQ), the Swiss UID register for CHE numbers and the Brønnøysund register for Norwegian numbers.
 * Applies reverse charge to B2B sales with a valid number, with the wording required on the order, emails and invoice text (filterable and translatable). A valid number from your own country never exempts unless you switch that on.
 * Charges B2C customers your country's VAT below the EUR 10,000 OSS threshold and the destination country's VAT above it, switching automatically. You can also tell the plugin you're OSS-registered to always charge destination VAT.
-* Digital products use location evidence (billing country, shipping country and geolocation). When the evidence conflicts, the customer can be asked to confirm their country.
+* Digital products use location evidence (billing country, shipping country and geolocation). When the evidence conflicts, the customer is asked to confirm their country, and an optional setting blocks checkout until they do (block and classic checkout).
 * Imports standard and reduced rates from the EU's TEDB into your WooCommerce tax classes. It shows a diff first and never changes a rate until you apply it. A tax class mapping screen sets which EU rate each class follows, per country.
 * Optional fixed gross prices across EU countries for stores that enter prices with tax.
 * Records the decision on every order: the number, the registry answer, the VIES consultation number when you've entered your own VAT number, the location evidence and the rule that applied. An EU VAT box on the order screen shows it, with a decision log and a button to re-check the number.
 * Re-checks numbers that couldn't be validated at checkout and can email you when one validates after the order was placed.
+* A VAT column on the orders list shows each order's VAT number, its validation status and the treatment applied, with a filter for orders pending validation or flagged. Works with HPOS and the legacy order screen.
+* Emails the store admin when cross-border EU consumer sales reach a share of the EUR 10,000 OSS threshold (80% by default) and again when they pass it, once a year each. Edit or turn it off under WooCommerce > Settings > Emails.
 * Quarterly OSS return and EC Sales List reports with CSV export, in EUR. Orders in other currencies are converted at the ECB reference rate.
+* Optional business-only mode: customers must give a valid VAT number to order, everywhere, in the EU or in countries you choose, on the block and classic checkout.
+* Monthly INTRASTAT report of physical goods dispatched to other member states, with CN8 code, country of origin and net mass per product, and CSV export. The CSV is the data to file; thresholds and file formats differ per member state.
 * REST endpoints for both reports and for the VAT data of a single order, restricted by capability.
 * A setup check lists what's missing: your VAT number, tax rates for destination countries, geolocation and HMRC credentials.
 * Works with HPOS and with the block and classic checkouts. Integrates with WooCommerce Subscriptions renewal hooks, see the FAQ.
@@ -110,6 +116,16 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 5. The EU VAT reports: OSS return and EC Sales List.
 
 == Changelog ==
+
+= 0.1.5 =
+* New: option to block checkout until the customer confirms their country when the billing and IP countries disagree, on the block and classic checkouts. Off by default.
+* New: business-only mode, requiring a valid VAT number to order, everywhere, in the EU or in chosen countries.
+* New: INTRASTAT report with CSV export and REST endpoint, and per-product commodity code, country of origin and net mass.
+* New: VAT number field on the registration form, off by default.
+* New: VAT-exempt user roles, recorded on every order they exempt.
+* New: VAT column and VAT-status filter on the orders list.
+* New: email warning when cross-border EU consumer sales near the EUR 10,000 threshold, and again when they pass it.
+* Fix: a VAT number typed while creating an account at the classic checkout is now saved to the account.
 
 = 0.1.4 =
 * Fix: on hosts where WordPress fetches over cURL with OpenSSL 3, VIES checks failed and business customers were charged VAT. Registry requests now ask for uncompressed answers.

@@ -83,6 +83,7 @@ class InputGatherer {
 				'shipping_postcode' => '' === $shipping ? '' : $customer->get_shipping_postcode(),
 				'pickup'            => (bool) array_intersect( wc_get_chosen_shipping_method_ids(), self::PICKUP_METHODS ),
 				'number'            => (string) $customer->get_meta( self::NUMBER_META ),
+				'user_id'           => $customer->get_id(),
 				'ip'                => $this->ip_country( WC_Geolocation::get_ip_address() ),
 				'self_certified'    => is_string( $certified ) && '' !== $billing && strtoupper( $certified ) === $billing ? $billing : null,
 				'lines'             => $lines,
@@ -137,6 +138,7 @@ class InputGatherer {
 				'shipping_postcode' => '' === $shipping ? '' : $order->get_shipping_postcode(),
 				'pickup'            => (bool) array_intersect( $methods, self::PICKUP_METHODS ),
 				'number'            => (string) $order->get_meta( self::NUMBER_META ),
+				'user_id'           => $order->get_customer_id(),
 				'ip'                => array_key_exists( 'ip', $evidence ) ? $evidence['ip'] : $this->ip_country( $order->get_customer_ip_address() ),
 				'self_certified'    => isset( $evidence['self_certified'] ) && $evidence['self_certified'] === $billing ? $billing : null,
 				'lines'             => $lines,
@@ -148,7 +150,7 @@ class InputGatherer {
 	}
 
 	/**
-	 * @param array{billing: string, billing_postcode: string, shipping: string, shipping_postcode: string, pickup: bool, number: string, ip: ?string, self_certified: ?string, lines: Line[], crossing: bool} $in
+	 * @param array{billing: string, billing_postcode: string, shipping: string, shipping_postcode: string, pickup: bool, number: string, user_id: int, ip: ?string, self_certified: ?string, lines: Line[], crossing: bool} $in
 	 */
 	private function input( array $in, string $trigger, bool $allow_network ): DecisionInput {
 		$settings = Settings::get();
@@ -191,8 +193,18 @@ class InputGatherer {
 			),
 			$in['lines'],
 			$trigger,
-			gmdate( 'Y-m-d\TH:i:s\Z' )
+			gmdate( 'Y-m-d\TH:i:s\Z' ),
+			$this->exempt_roles( $in['user_id'] )
 		);
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function exempt_roles( int $user_id ): array {
+		$configured = Settings::get()->exempt_roles();
+		$user       = $user_id > 0 && array() !== $configured ? get_userdata( $user_id ) : false;
+		return $user ? array_values( array_intersect( $configured, $user->roles ) ) : array();
 	}
 
 	/**

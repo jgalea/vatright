@@ -59,8 +59,9 @@ class Plugin {
 
 		$oss = new Reports\OssReport( $fx );
 		$esl = new Reports\EcSalesList();
-		( new Reports\ReportsScreen( $oss, $esl ) )->register();
-		( new Reports\RestController( $oss, $esl ) )->register();
+		$ira = new Reports\IntrastatReport();
+		( new Reports\ReportsScreen( $oss, $esl, $ira ) )->register();
+		( new Reports\RestController( $oss, $esl, $ira ) )->register();
 
 		$gatherer = new Checkout\InputGatherer( $validator, new Ledger\ThresholdTracker(), $fx );
 		$steering = new Checkout\CartSteering( $gatherer, new Domain\Rules() );
@@ -68,7 +69,9 @@ class Plugin {
 		$field = new Checkout\VatField( $validator );
 		$field->register();
 		( new Checkout\StoreApiExtension( $field ) )->register();
+		( new Account\RegistrationField( $validator ) )->register();
 		( new Admin\ProductSupplyField() )->register();
+		( new Admin\ProductIntrastatFields() )->register();
 		( new Checkout\CheckoutDecider( $steering ) )->register();
 		( new Orders\OrderSteering( $steering ) )->register();
 
@@ -77,6 +80,8 @@ class Plugin {
 		( new Orders\AdminRecalc( $gatherer, new Domain\Rules(), $steering ) )->register();
 		( new Orders\MetaBox( $revalidation ) )->register();
 		( new Orders\InvoiceText() )->register();
+		( new Orders\OrdersColumn() )->register();
+		( new Ledger\ThresholdNotifier( new Ledger\ThresholdTracker() ) )->register();
 		( new Integrations\Subscriptions( $gatherer, new Domain\Rules() ) )->register();
 		self::$cart_steering = $steering;
 	}

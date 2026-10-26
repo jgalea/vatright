@@ -6,6 +6,7 @@ use Vatright\Domain\Scheme;
 use Vatright\Ledger\Fx;
 use Vatright\Ledger\Schema;
 use Vatright\Reports\EcSalesList;
+use Vatright\Reports\IntrastatReport;
 use Vatright\Reports\OssReport;
 use Vatright\Reports\RestController;
 use WP_REST_Request;
@@ -17,7 +18,7 @@ class RestControllerTest extends ReportsTestCase {
 	public function set_up() {
 		parent::set_up();
 		$this->reset_rest_server();
-		( new RestController( new OssReport( new Fx( $this->transport ) ), new EcSalesList() ) )->register();
+		( new RestController( new OssReport( new Fx( $this->transport ) ), new EcSalesList(), new IntrastatReport() ) )->register();
 		rest_get_server();
 	}
 
@@ -53,6 +54,10 @@ class RestControllerTest extends ReportsTestCase {
 			'/reports/ec-sales-list'               => array(
 				'year'    => 2026,
 				'quarter' => 3,
+			),
+			'/reports/intrastat'                   => array(
+				'year'  => 2026,
+				'month' => 9,
 			),
 			'/orders/' . $order->get_id() . '/vat' => array(),
 		);
@@ -186,5 +191,37 @@ class RestControllerTest extends ReportsTestCase {
 		);
 
 		$this->assertSame( 502, $response->get_status() );
+	}
+
+	public function test_intrastat_shape_and_validation(): void {
+		$this->act_as( 'shop_manager' );
+
+		$data = $this->get(
+			'/reports/intrastat',
+			array(
+				'year'  => 2026,
+				'month' => 9,
+			)
+		)->get_data();
+
+		$this->assertSame( 2026, $data['year'] );
+		$this->assertSame( 9, $data['month'] );
+		$this->assertSame( '2026-09', $data['period'] );
+		$this->assertSame( array(), $data['rows'] );
+		$this->assertSame( array(), $data['missing'] );
+
+		foreach ( array( 0, 13 ) as $month ) {
+			$this->assertSame(
+				400,
+				$this->get(
+					'/reports/intrastat',
+					array(
+						'year'  => 2026,
+						'month' => $month,
+					)
+				)->get_status()
+			);
+		}
+		$this->assertSame( 400, $this->get( '/reports/intrastat', array( 'year' => 2026 ) )->get_status() );
 	}
 }

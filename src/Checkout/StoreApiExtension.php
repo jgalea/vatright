@@ -15,7 +15,7 @@ use WC_Customer;
  * the block can send: the VAT number as typed (which triggers the registry
  * lookup) and the self-certification checkbox.
  *
- * @phpstan-type Status array{status: string, rule: string, message: string, needs_self_certification: bool, self_certified: bool, self_certification_label: string}
+ * @phpstan-type Status array{status: string, rule: string, message: string, needs_self_certification: bool, self_certification_required: bool, self_certified: bool, self_certification_label: string}
  */
 class StoreApiExtension {
 
@@ -75,12 +75,13 @@ class StoreApiExtension {
 			'context'  => array( 'view', 'edit' ),
 		);
 		return array(
-			'status'                   => $readonly + array( 'type' => 'string' ),
-			'rule'                     => $readonly + array( 'type' => 'string' ),
-			'message'                  => $readonly + array( 'type' => 'string' ),
-			'needs_self_certification' => $readonly + array( 'type' => 'boolean' ),
-			'self_certified'           => $readonly + array( 'type' => 'boolean' ),
-			'self_certification_label' => $readonly + array( 'type' => 'string' ),
+			'status'                      => $readonly + array( 'type' => 'string' ),
+			'rule'                        => $readonly + array( 'type' => 'string' ),
+			'message'                     => $readonly + array( 'type' => 'string' ),
+			'needs_self_certification'    => $readonly + array( 'type' => 'boolean' ),
+			'self_certification_required' => $readonly + array( 'type' => 'boolean' ),
+			'self_certified'              => $readonly + array( 'type' => 'boolean' ),
+			'self_certification_label'    => $readonly + array( 'type' => 'string' ),
 		);
 	}
 
@@ -131,12 +132,13 @@ class StoreApiExtension {
 	 */
 	public static function status( ?Decision $decision ): array {
 		$none = array(
-			'status'                   => 'none',
-			'rule'                     => '',
-			'message'                  => '',
-			'needs_self_certification' => false,
-			'self_certified'           => false,
-			'self_certification_label' => '',
+			'status'                      => 'none',
+			'rule'                        => '',
+			'message'                     => '',
+			'needs_self_certification'    => false,
+			'self_certification_required' => false,
+			'self_certified'              => false,
+			'self_certification_label'    => '',
 		);
 		if ( null === $decision ) {
 			return $none;
@@ -149,13 +151,18 @@ class StoreApiExtension {
 		$none      = array_merge(
 			$none,
 			array(
-				'needs_self_certification' => Settings::get()->self_certification() && ! empty( $evidence['conflict'] ) && ! $certified,
-				'self_certified'           => $certified,
-				'self_certification_label' => self::self_certification_label( $billing ),
+				'needs_self_certification'    => Settings::get()->self_certification() && ! empty( $evidence['conflict'] ) && ! $certified && Rule::ROLE_EXEMPT !== $decision->rule(),
+				'self_certification_required' => CheckoutDecider::requires_confirmation( $decision ),
+				'self_certified'              => $certified,
+				'self_certification_label'    => self::self_certification_label( $billing ),
 			)
 		);
 
 		if ( null === $record['vat_number'] ) {
+			if ( $none['self_certification_required'] ) {
+				$none['status']  = 'invalid';
+				$none['message'] = CheckoutDecider::message( 'self_certification_required' );
+			}
 			return $none;
 		}
 		list( $status, $message ) = self::describe( $decision, (string) ( $record['validation']['status'] ?? '' ), (string) ( $record['validation']['detail'] ?? '' ) );
@@ -182,6 +189,9 @@ class StoreApiExtension {
 		$code = $decision->blocking_error();
 		if ( null !== $code ) {
 			return array( 'invalid_vat_number' === $code ? 'invalid' : 'pending', CheckoutDecider::message( $code ) );
+		}
+		if ( Rule::ROLE_EXEMPT === $decision->rule() ) {
+			return array( 'verified', __( 'No VAT is charged on this order.', 'vatright' ) );
 		}
 		if ( $decision->is_vat_exempt() ) {
 			if ( ValidationResult::VALID === $validation ) {

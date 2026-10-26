@@ -61,11 +61,15 @@ final class DecisionInput {
 	/** @var string */
 	private $now_utc;
 
+	/** @var string[] */
+	private $exempt_roles;
+
 	/**
 	 * Empty shipping country and postcode mean the order has no shipping address.
 	 *
 	 * @param array<string,mixed> $threshold Keys current_eur, previous_eur, exceeded, forced.
 	 * @param Line[]              $lines
+	 * @param string[]            $exempt_roles The customer's roles that the merchant treats as VAT-exempt.
 	 */
 	public function __construct(
 		string $store_country,
@@ -86,7 +90,8 @@ final class DecisionInput {
 		Evidence $evidence,
 		array $lines,
 		string $trigger,
-		string $now_utc
+		string $now_utc,
+		array $exempt_roles = array()
 	) {
 		$this->store_country            = $store_country;
 		$this->oss_registered           = $oss_registered;
@@ -107,6 +112,7 @@ final class DecisionInput {
 		$this->lines                    = $lines;
 		$this->trigger                  = $trigger;
 		$this->now_utc                  = $now_utc;
+		$this->exempt_roles             = $exempt_roles;
 	}
 
 	public function store_country(): string {
@@ -189,5 +195,12 @@ final class DecisionInput {
 
 	public function now_utc(): string {
 		return $this->now_utc;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function exempt_roles(): array {
+		return $this->exempt_roles;
 	}
 }

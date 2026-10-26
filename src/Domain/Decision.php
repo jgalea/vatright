@@ -155,6 +155,25 @@ final class Decision {
 		return 1 === count( $countries ) ? (string) array_key_first( $countries ) : null;
 	}
 
+	/**
+	 * Digital B2C lines are taxed where the customer is, which needs two
+	 * matching pieces of evidence. A customer whose IP country disagrees with
+	 * the billing country, and who has not confirmed the billing country, is
+	 * where a confirmation is called for.
+	 */
+	public function needs_location_confirmation(): bool {
+		$evidence = $this->evidence;
+		if ( $this->vat_exempt || null !== $this->blocking_error || empty( $evidence['conflict'] ) || empty( $evidence['ip'] ) || ! empty( $evidence['self_certified'] ) ) {
+			return false;
+		}
+		foreach ( $this->lines as $line ) {
+			if ( Line::DIGITAL === $line->supply_type() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public function blocking_error(): ?string {
 		return $this->blocking_error;
 	}

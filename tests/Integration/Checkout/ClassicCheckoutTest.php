@@ -92,20 +92,4 @@ class ClassicCheckoutTest extends CheckoutTestCase {
 			}
 		}
 	}
-
-	/**
-	 * @param array<string,mixed> $reply
-	 */
-	private function placed( array $reply ): WC_Order {
-		$this->assertSame( 'success', $reply['result'] ?? null, (string) wp_json_encode( $reply ) );
-		$orders = wc_get_orders(
-			array(
-				'limit'   => 1,
-				'orderby' => 'id',
-				'order'   => 'DESC',
-			)
-		);
-		$this->assertCount( 1, $orders );
-		return $orders[0];
-	}
 }

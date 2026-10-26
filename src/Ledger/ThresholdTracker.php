@@ -39,7 +39,7 @@ class ThresholdTracker {
 		}
 	}
 
-	private function threshold(): float {
+	public function threshold(): float {
 		return (float) apply_filters( 'vatright_threshold_eur', self::THRESHOLD_EUR );
 	}
 

@@ -3,6 +3,7 @@
 namespace Vatright\Admin;
 
 use Vatright\Checkout\VatField;
+use Vatright\Domain\B2bScope;
 use Vatright\Domain\FormatCheck;
 use Vatright\Domain\ValidationResult;
 use Vatright\Domain\VatNumber;
@@ -174,6 +175,33 @@ class SettingsSection {
 				)
 			),
 			$this->field(
+				'b2b_only',
+				'select',
+				__( 'Sell to businesses only', 'vatright' ),
+				$s->b2b_only(),
+				array(
+					'options' => array(
+						B2bScope::OFF        => __( 'Off: a VAT number is optional', 'vatright' ),
+						B2bScope::EVERYWHERE => __( 'Require a valid VAT number from every customer', 'vatright' ),
+						B2bScope::EU         => __( 'Require a valid VAT number from customers billing in the EU', 'vatright' ),
+						B2bScope::COUNTRIES  => __( 'Require a valid VAT number from customers billing in the countries chosen below', 'vatright' ),
+					),
+					'desc'    => __( 'The customer has to enter a VAT number that its registry confirms before the order is accepted, on the block and the classic checkout. A registry outage follows "When a registry is unavailable" above: "Do not accept the order" refuses the order, while the two other choices accept it with VAT charged or exempted and flagged for a re-check. A number the registry has not checked, because no registry covers its country or the lookup was turned away for load, is never accepted unchecked.', 'vatright' ),
+				)
+			),
+			$this->field(
+				'b2b_only_countries',
+				'multiselect',
+				__( 'Business-only countries', 'vatright' ),
+				$s->b2b_only_countries(),
+				array(
+					'options'  => WC()->countries->get_countries(),
+					'class'    => 'wc-enhanced-select',
+					'css'      => 'min-width: 350px;',
+					'desc_tip' => __( 'Used when the setting above is "chosen countries". The country is the customer\'s billing country.', 'vatright' ),
+				)
+			),
+			$this->field(
 				'cache_ttl_valid_days',
 				'number',
 				__( 'Keep valid results for (days)', 'vatright' ),
@@ -187,7 +215,9 @@ class SettingsSection {
 				)
 			),
 			$this->checkbox( 'self_certification', __( 'Self-certification', 'vatright' ), __( 'Ask digital customers to confirm their country when the evidence conflicts', 'vatright' ), $s->self_certification() ),
+			$this->checkbox( 'self_certification_required', __( 'Require confirmation', 'vatright' ), __( 'Block checkout until the customer confirms their country (needs Self-certification)', 'vatright' ), $s->self_certification_required() ),
 			$this->checkbox( 'allow_domestic_exemption', __( 'Domestic B2B', 'vatright' ), __( 'Allow VAT exemption for valid numbers from the store country', 'vatright' ), $s->allow_domestic_exemption() ),
+			$this->checkbox( 'registration_vat_field', __( 'Registration form', 'vatright' ), __( 'Add an optional VAT number field to the My Account registration form', 'vatright' ), $s->registration_vat_field() ),
 			$this->checkbox( 'notify_admin_on_revalidation', __( 'Revalidation emails', 'vatright' ), __( 'Email the admin when a number validates after the order was placed', 'vatright' ), $s->notify_admin_on_revalidation() ),
 			array(
 				'type' => 'sectionend',
@@ -199,7 +229,33 @@ class SettingsSection {
 				'id'    => 'vatright_treatment',
 			),
 			$this->checkbox( 'oss_registered', __( 'OSS', 'vatright' ), __( 'I am registered for the One Stop Shop (always charge destination VAT)', 'vatright' ), $s->oss_registered() ),
+			$this->field(
+				'threshold_warning_percent',
+				'number',
+				__( 'OSS threshold warning (%)', 'vatright' ),
+				$s->threshold_warning_percent(),
+				array(
+					'css'               => 'width: 80px;',
+					'desc_tip'          => __( 'Email the store admin when cross-border EU consumer sales reach this share of the EUR 10,000 threshold. A second email goes out when they pass it. Each email is sent once a year. Edit or turn them off under WooCommerce > Settings > Emails.', 'vatright' ),
+					'custom_attributes' => array(
+						'min' => '1',
+						'max' => '99',
+					),
+				)
+			),
 			$this->checkbox( 'fixed_prices', __( 'Fixed prices', 'vatright' ), __( 'Keep gross prices the same in every EU country (prices entered with tax)', 'vatright' ), $s->fixed_prices() ),
+			$this->field(
+				'exempt_roles',
+				'multiselect',
+				__( 'VAT-exempt roles', 'vatright' ),
+				$s->exempt_roles(),
+				array(
+					'options' => self::role_options(),
+					'class'   => 'wc-enhanced-select',
+					'css'     => 'min-width: 300px;',
+					'desc'    => __( 'Orders from customers with these roles are VAT-exempt. A user role is not a basis for VAT exemption under EU VAT law on its own, so you are responsible for making sure each exemption is correct, for example that these accounts are checked VAT-registered businesses. The role is recorded on every order it exempts. Leave empty to exempt nobody.', 'vatright' ),
+				)
+			),
 			array(
 				'type' => 'sectionend',
 				'id'   => 'vatright_treatment',
@@ -278,6 +334,22 @@ class SettingsSection {
 		if ( 'number' === $option['type'] ) {
 			$attributes = $option['custom_attributes'];
 			return max( (int) $attributes['min'], min( (int) $attributes['max'], (int) $value ) );
+		}
+		if ( 'b2b_only' === $key ) {
+			return in_array( $value, B2bScope::MODES, true ) ? $value : B2bScope::OFF;
+		}
+		if ( 'b2b_only_countries' === $key ) {
+			return $this->sanitize_countries( $value );
+		}
+		if ( 'exempt_roles' === $key ) {
+			return array_values(
+				array_filter(
+					(array) $value,
+					static function ( $role ): bool {
+						return is_string( $role ) && wp_roles()->is_role( $role );
+					}
+				)
+			);
 		}
 		if ( 'store_vat_number' === $key ) {
 			return $this->sanitize_store_vat_number( (string) $value );
@@ -400,8 +472,28 @@ class SettingsSection {
 		update_option( self::JOBS_SCHEDULED, 1, false );
 	}
 
+	/**
+	 * @return array<string,string>
+	 */
+	private static function role_options(): array {
+		$options = array();
+		foreach ( wp_roles()->get_names() as $slug => $name ) {
+			$options[ $slug ] = translate_user_role( $name );
+		}
+		return $options;
+	}
+
 	private static function notice_class( string $severity ): string {
 		return SetupCheck::ERROR === $severity ? 'error' : ( SetupCheck::WARNING === $severity ? 'warning' : 'info' );
+	}
+
+	/**
+	 * @param mixed $value
+	 * @return string[]
+	 */
+	private function sanitize_countries( $value ): array {
+		$known = array_keys( WC()->countries->get_countries() );
+		return array_values( array_unique( array_intersect( array_map( 'strtoupper', array_map( 'strval', (array) $value ) ), $known ) ) );
 	}
 
 	private function sanitize_store_vat_number( string $raw ): string {

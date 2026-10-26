@@ -67,6 +67,7 @@ class LedgerWriter {
 		$years = $this->purge( 'order_id = %d AND entry_type = %s', array( $order->get_id(), 'sale' ) );
 		$this->insert_rows( $order, $decision, $buckets, 'sale', null, $supply_at, $period, $period );
 		ThresholdTracker::flush( ...array_merge( $years, array( (int) substr( $period, 0, 4 ) ) ) );
+		do_action( 'vatright_ledger_recorded', (int) substr( $period, 0, 4 ) );
 	}
 
 	public function record_refund( int $order_id, int $refund_id ): void {

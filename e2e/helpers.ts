@@ -56,7 +56,7 @@ export function registryCalls(): number {
 }
 
 export async function visitorIpIn( context: BrowserContext, country: string ) {
-	await context.addCookies( [ { name: 'vatright_e2e_ip_country', value: country, url: 'http://localhost:8899' } ] );
+	await context.addCookies( [ { name: 'vatright_e2e_ip_country', value: country, url: `http://localhost:${ process.env.VATRIGHT_E2E_PORT || '8899' }` } ] );
 }
 
 export async function addToCart( page: Page, productId: number ) {

@@ -20,9 +20,13 @@ class RestController {
 	/** @var EcSalesList */
 	private $esl;
 
-	public function __construct( OssReport $oss, EcSalesList $esl ) {
-		$this->oss = $oss;
-		$this->esl = $esl;
+	/** @var IntrastatReport */
+	private $intrastat;
+
+	public function __construct( OssReport $oss, EcSalesList $esl, IntrastatReport $intrastat ) {
+		$this->oss       = $oss;
+		$this->esl       = $esl;
+		$this->intrastat = $intrastat;
 	}
 
 	public function register(): void {
@@ -71,6 +75,24 @@ class RestController {
 				'callback'            => array( $this, 'ec_sales_list' ),
 				'permission_callback' => array( $this, 'can_view_reports' ),
 				'args'                => $period,
+			)
+		);
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/reports/intrastat',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'intrastat' ),
+				'permission_callback' => array( $this, 'can_view_reports' ),
+				'args'                => array(
+					'year'  => $period['year'],
+					'month' => array(
+						'type'     => 'integer',
+						'required' => true,
+						'minimum'  => 1,
+						'maximum'  => 12,
+					),
+				),
 			)
 		);
 		register_rest_route(
@@ -135,6 +157,24 @@ class RestController {
 				'rows'    => $rows,
 			)
 		);
+	}
+
+	/**
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function intrastat( WP_REST_Request $request ) {
+		try {
+			return rest_ensure_response( $this->intrastat->build( (int) $request['year'], (int) $request['month'] ) );
+		} catch ( IncompleteReport $e ) {
+			return new WP_Error(
+				'vatright_incomplete_report',
+				$e->getMessage(),
+				array(
+					'status'    => 502,
+					'order_ids' => $e->order_ids(),
+				)
+			);
+		}
 	}
 
 	/**

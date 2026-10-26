@@ -11,5 +11,6 @@ final class Scheme {
 	const DOMESTIC                = 'domestic';
 	const EXPORT                  = 'export';
 	const OUTSIDE_TERRITORY       = 'outside_territory';
+	const ROLE_EXEMPT             = 'role_exempt';
 	const MIXED                   = 'mixed';
 }

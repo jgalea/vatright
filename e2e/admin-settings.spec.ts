@@ -104,3 +104,29 @@ test( 'with taxes off, the setup notice links to the setting that turns them on'
 		wp( 'option', 'update', 'woocommerce_calc_taxes', 'yes' );
 	}
 } );
+
+test( 'the registration field and VAT-exempt roles save from the settings screen', async ( { page } ) => {
+	await page.goto( RATES );
+	const field = page.getByLabel( 'Add an optional VAT number field to the My Account registration form' );
+	await expect( field ).not.toBeChecked();
+	await expect( page.getByText( 'not a basis for VAT exemption' ) ).toBeVisible();
+
+	await field.check();
+	const roles = page.locator( '#vatright_settings\\[exempt_roles\\]' );
+	for ( const name of [ 'Customer', 'Subscriber' ] ) {
+		await roles.locator( 'xpath=following-sibling::span' ).click();
+		await page.getByRole( 'option', { name, exact: true } ).click();
+	}
+	await page.keyboard.press( 'Escape' );
+	// Select2 swallows the next click outside it.
+	await page.locator( '#vatright_validation-description, h2:has-text("VAT number validation")' ).first().click();
+	await page.screenshot( { path: process.env.HOME + '/code/artifacts/vatright/features/accounts/settings.png', fullPage: true } );
+	await page.getByRole( 'button', { name: 'Save changes' } ).click();
+	await page.waitForLoadState( 'networkidle' );
+
+	const saved = () => wpEval( '$roles = Vatright\\Settings::get()->exempt_roles(); sort( $roles ); echo "@@" . wp_json_encode( array( "roles" => $roles, "field" => Vatright\\Settings::get()->registration_vat_field() ) ) . "@@";' );
+	await expect.poll( saved ).toEqual( { roles: [ 'customer', 'subscriber' ], field: true } );
+	await page.reload();
+	await expect( page.getByLabel( 'Add an optional VAT number field to the My Account registration form' ) ).toBeChecked();
+	await expect( page.locator( '#vatright_settings\\[exempt_roles\\] option:checked' ) ).toHaveCount( 2 );
+} );

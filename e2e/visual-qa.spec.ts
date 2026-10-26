@@ -105,7 +105,7 @@ for ( const flow of flows ) {
 			// One fresh visit per width.
 			for ( const size of WIDTHS ) {
 				resetState();
-				const context = await browser.newContext( { viewport: size, reducedMotion: 'reduce', baseURL: 'http://localhost:8899' } );
+				const context = await browser.newContext( { viewport: size, reducedMotion: 'reduce', baseURL: `http://localhost:${ process.env.VATRIGHT_E2E_PORT || '8899' }` } );
 				const page = await context.newPage();
 				await setup( flow, page, context );
 				await page.waitForTimeout( 600 );

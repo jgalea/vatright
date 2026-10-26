@@ -9,7 +9,7 @@ export default defineConfig({
 	workers: 1,
 	retries: 0,
 	use: {
-		baseURL: 'http://localhost:8899',
+		baseURL: `http://localhost:${ process.env.VATRIGHT_E2E_PORT || '8899' }`,
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure',
 	},

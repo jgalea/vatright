@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  */
 class RulesTest extends TestCase {
 
-	const EXEMPT_RULES = array( Rule::RC_GOODS_ART138, Rule::RC_SERVICES_ART196, Rule::DOMESTIC_B2B_ALLOWED, Rule::PENDING_EXEMPT );
+	const EXEMPT_RULES = array( Rule::RC_GOODS_ART138, Rule::RC_SERVICES_ART196, Rule::DOMESTIC_B2B_ALLOWED, Rule::PENDING_EXEMPT, Rule::ROLE_EXEMPT );
 
 	/**
 	 * @param array<string,mixed> $o
@@ -44,6 +44,7 @@ class RulesTest extends TestCase {
 				'self_certified'    => null,
 				'lines'             => array( new Line( 'd1', Line::DIGITAL, false ) ),
 				'trigger'           => 'checkout',
+				'exempt_roles'      => array(),
 			),
 			$o
 		);
@@ -81,7 +82,8 @@ class RulesTest extends TestCase {
 			$evidence,
 			$o['lines'],
 			$o['trigger'],
-			'2026-10-17T12:00:00Z'
+			'2026-10-17T12:00:00Z',
+			$o['exempt_roles']
 		);
 	}
 
@@ -1131,6 +1133,97 @@ class RulesTest extends TestCase {
 		$this->assertEquals( $d, Decision::from_array( $record ) );
 	}
 
+	public function test_exempt_role_exempts_a_consumer_with_its_own_rule(): void {
+		$d = $this->decide(
+			array(
+				'billing_country'  => 'FR',
+				'billing_postcode' => '75001',
+				'lines'            => array( $this->goods(), $this->digital() ),
+				'exempt_roles'     => array( 'wholesale_customer' ),
+			)
+		);
+		$this->assertTrue( $d->is_vat_exempt() );
+		$this->assertSame( Rule::ROLE_EXEMPT, $d->rule() );
+		$this->assertSame( Scheme::ROLE_EXEMPT, $d->scheme() );
+		$this->assertSame( array(), $d->legal_text() );
+		$this->assertNull( $d->blocking_error() );
+		$this->assertSame( array( 'wholesale_customer' ), $d->to_array()['customer']['exempt_roles'] );
+		$this->assertEquals( $d, Decision::from_array( $d->to_array() ) );
+	}
+
+	public function test_without_an_exempt_role_nothing_changes_and_the_record_has_no_roles(): void {
+		$d = $this->decide( array( 'billing_country' => 'FR' ) );
+		$this->assertCharged( $d );
+		$this->assertArrayNotHasKey( 'exempt_roles', $d->to_array()['customer'] );
+	}
+
+	public function test_a_confirmed_vat_number_keeps_its_reverse_charge_over_the_role(): void {
+		$d = $this->decide(
+			array(
+				'vat'          => 'DE123456789',
+				'status'       => ValidationResult::VALID,
+				'exempt_roles' => array( 'wholesale_customer' ),
+			)
+		);
+		$this->assertSame( Rule::RC_SERVICES_ART196, $d->rule() );
+		$this->assertSame( array( 'art196' ), $d->legal_text() );
+	}
+
+	public function test_an_invalid_number_does_not_block_a_role_exempt_customer(): void {
+		$d = $this->decide(
+			array(
+				'vat'          => 'DE123456789',
+				'status'       => ValidationResult::INVALID,
+				'exempt_roles' => array( 'wholesale_customer' ),
+			)
+		);
+		$this->assertTrue( $d->is_vat_exempt() );
+		$this->assertSame( Rule::ROLE_EXEMPT, $d->rule() );
+		$this->assertNull( $d->blocking_error() );
+		$this->assertSame( array(), $d->flags() );
+	}
+
+	public function test_role_exemption_leaves_exports_as_they_are(): void {
+		$d = $this->decide(
+			array(
+				'billing_country' => 'US',
+				'lines'           => array( $this->goods() ),
+				'exempt_roles'    => array( 'wholesale_customer' ),
+			)
+		);
+		$this->assertSame( Rule::EXPORT_NON_EU, $d->rule() );
+		$this->assertSame( Scheme::EXPORT, $d->scheme() );
+	}
+
+	public function test_role_exemption_covers_every_taxable_line_of_a_mixed_cart(): void {
+		$d = $this->decide(
+			array(
+				'oss'               => true,
+				'billing_country'   => 'DE',
+				'shipping_country'  => 'DE',
+				'shipping_postcode' => '10115',
+				'lines'             => array( $this->goods(), $this->service() ),
+				'exempt_roles'      => array( 'reseller' ),
+			)
+		);
+		$this->assertTrue( $d->is_vat_exempt() );
+		$this->assertSame( Scheme::ROLE_EXEMPT, $d->scheme() );
+		$this->assertSame( 'DE', $this->line_tax_country( $d, 'g1' ) );
+		$this->assertSame( 'MT', $this->line_tax_country( $d, 's1' ) );
+	}
+
+	public function test_a_domestic_sale_to_a_role_exempt_customer_is_exempt(): void {
+		$d = $this->decide(
+			array(
+				'billing_country' => 'MT',
+				'lines'           => array( $this->goods() ),
+				'exempt_roles'    => array( 'reseller' ),
+			)
+		);
+		$this->assertTrue( $d->is_vat_exempt() );
+		$this->assertSame( Rule::ROLE_EXEMPT, $d->rule() );
+	}
+
 	public function test_default_id_is_a_uuid4(): void {
 		$id = ( new Rules() )->decide( $this->input() )->id();
 		$this->assertMatchesRegularExpression( '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id );
@@ -1226,5 +1319,70 @@ class RulesTest extends TestCase {
 		}
 		// phpcs:enable
 		$this->assertGreaterThan( 25, $exempted, 'the generator must reach exempt decisions or the property proves nothing' );
+	}
+
+	/**
+	 * @dataProvider provide_location_confirmation
+	 * @param array<string,mixed> $o
+	 */
+	public function test_location_confirmation_is_needed_only_where_evidence_conflicts( array $o, bool $needed, string $label ): void {
+		$this->assertSame( $needed, $this->decide( $o )->needs_location_confirmation(), $label );
+	}
+
+	/**
+	 * @return array<string,array{array<string,mixed>,bool,string}>
+	 */
+	public function provide_location_confirmation(): array {
+		$b2b = array(
+			'vat'    => 'DE114103379',
+			'status' => ValidationResult::VALID,
+		);
+		return array(
+			'digital, billing and IP disagree'    => array( array( 'ip' => 'FR' ), true, 'Reg. Art. 24f: digital B2C needs two matching pieces' ),
+			'digital, IP agrees'                  => array( array( 'ip' => 'DE' ), false, 'no conflict' ),
+			'digital, no IP source'               => array( array( 'ip' => null ), false, 'nothing to disagree with' ),
+			'digital, already self-certified'     => array(
+				array(
+					'ip'             => 'FR',
+					'self_certified' => 'DE',
+				),
+				false,
+				'confirmation given',
+			),
+			'goods only'                          => array(
+				array(
+					'ip'    => 'FR',
+					'lines' => array( $this->goods() ),
+				),
+				false,
+				'goods use the delivery address',
+			),
+			'service only'                        => array(
+				array(
+					'ip'    => 'FR',
+					'lines' => array( $this->service() ),
+				),
+				false,
+				'services follow the customer, not evidence',
+			),
+			'digital with goods'                  => array(
+				array(
+					'ip'    => 'FR',
+					'lines' => array( $this->goods(), $this->digital() ),
+				),
+				true,
+				'the digital line needs it',
+			),
+			'valid B2B digital'                   => array( array( 'ip' => 'FR' ) + $b2b, false, 'exempt business' ),
+			'B2B number the registry turned down' => array(
+				array(
+					'ip'     => 'FR',
+					'vat'    => 'DE123475223',
+					'status' => ValidationResult::INVALID,
+				),
+				false,
+				'the invalid number blocks on its own',
+			),
+		);
 	}
 }

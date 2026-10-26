@@ -23,7 +23,7 @@ class DecisionInputTest extends TestCase {
 			'forced'       => false,
 		);
 
-		$input = new DecisionInput( 'MT', false, true, $threshold, 'reject', true, true, 'DE', '10115', 'AT', '1010', true, $number, 'de 123 456 789', $validation, $evidence, $lines, 'cart', '2026-10-17T12:00:00Z' );
+		$input = new DecisionInput( 'MT', false, true, $threshold, 'reject', true, true, 'DE', '10115', 'AT', '1010', true, $number, 'de 123 456 789', $validation, $evidence, $lines, 'cart', '2026-10-17T12:00:00Z', array( 'reseller' ) );
 
 		$this->assertSame( 'MT', $input->store_country() );
 		$this->assertFalse( $input->oss_registered() );
@@ -44,6 +44,7 @@ class DecisionInputTest extends TestCase {
 		$this->assertSame( $lines, $input->lines() );
 		$this->assertSame( 'cart', $input->trigger() );
 		$this->assertSame( '2026-10-17T12:00:00Z', $input->now_utc() );
+		$this->assertSame( array( 'reseller' ), $input->exempt_roles() );
 	}
 
 	public function test_optional_parts_can_be_absent(): void {
@@ -53,6 +54,7 @@ class DecisionInputTest extends TestCase {
 		$this->assertNull( $input->vat_raw() );
 		$this->assertNull( $input->validation() );
 		$this->assertSame( '', $input->shipping_country() );
+		$this->assertSame( array(), $input->exempt_roles() );
 	}
 
 	public function test_line_exposes_its_fields(): void {

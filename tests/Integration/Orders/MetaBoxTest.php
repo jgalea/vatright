@@ -57,6 +57,19 @@ class MetaBoxTest extends LifecycleTestCase {
 		$this->assertStringContainsString( '_wpnonce=', $html );
 	}
 
+	public function test_meta_box_shows_the_role_exemption_with_its_roles() {
+		$order    = $this->order( 'FR', 'FR', '75001', array( 'digital' ) );
+		$decision = $this->decide( 'FR', 'FR', '75001', array( 'digital' ), false, '', '', '', '', array( 'wholesale_customer' ) );
+		DecisionStore::apply( $order, $decision, 'checkout' );
+		$order->save();
+
+		$html = $this->html( $this->fresh( $order ) );
+
+		$this->assertStringContainsString( '<strong>VAT-exempt because of the customer role, as set in the VAT Right settings. The legal basis is the merchant&#039;s responsibility.</strong>', $html );
+		$this->assertStringContainsString( 'wholesale_customer', $html );
+		$this->assertStringContainsString( 'role_exempt', $html );
+	}
+
 	public function test_headline_says_could_not_be_checked_until_a_recheck_answers() {
 		$order = $this->pending_order( 'charge' );
 

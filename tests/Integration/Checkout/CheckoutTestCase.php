@@ -369,6 +369,22 @@ abstract class CheckoutTestCase extends IntegrationTestCase {
 		return $decoded;
 	}
 
+	/**
+	 * @param array<string,mixed> $reply
+	 */
+	protected function placed( array $reply ): WC_Order {
+		$this->assertSame( 'success', $reply['result'] ?? null, (string) wp_json_encode( $reply ) );
+		$orders = wc_get_orders(
+			array(
+				'limit'   => 1,
+				'orderby' => 'id',
+				'order'   => 'DESC',
+			)
+		);
+		$this->assertCount( 1, $orders );
+		return $orders[0];
+	}
+
 	protected function order_from( WP_REST_Response $response ): WC_Order {
 		$this->assertSame( 200, $response->get_status(), (string) wp_json_encode( $response->get_data() ) );
 		$order = wc_get_order( (int) $response->get_data()['order_id'] );

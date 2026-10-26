@@ -124,6 +124,7 @@ class MetaBox {
 			__( 'Billing country', 'vatright' )        => trim( $customer['billing']['country'] . ' ' . $customer['billing']['postcode'] ),
 			__( 'Shipping country', 'vatright' )       => trim( $customer['shipping']['country'] . ' ' . $customer['shipping']['postcode'] ),
 			__( 'Local pickup', 'vatright' )           => $customer['local_pickup'] ? __( 'Yes', 'vatright' ) : __( 'No', 'vatright' ),
+			__( 'Exempt customer roles', 'vatright' )  => implode( ', ', (array) ( $customer['exempt_roles'] ?? array() ) ),
 			__( 'Billing company', 'vatright' )        => $order->get_billing_company(),
 			__( 'VAT number as typed', 'vatright' )    => (string) ( $record['vat_number']['raw'] ?? '' ),
 			__( 'VAT number', 'vatright' )             => (string) ( $record['vat_number']['canonical'] ?? '' ),
@@ -222,6 +223,8 @@ class MetaBox {
 				return __( 'The VAT number could not be checked: the order was refused.', 'vatright' );
 			case Rule::INVALID_NUMBER:
 				return __( 'The VAT number is not valid: VAT charged.', 'vatright' );
+			case Rule::ROLE_EXEMPT:
+				return __( 'VAT-exempt because of the customer role, as set in the VAT Right settings. The legal basis is the merchant\'s responsibility.', 'vatright' );
 			case Rule::NON_EU_NUMBER_RECORDED:
 				return __( 'Non-EU VAT number recorded: no EU VAT.', 'vatright' );
 			default:

@@ -94,8 +94,9 @@ abstract class OrderTestCase extends IntegrationTestCase {
 	 * Runs the real rules over a hand-built input whose lines match order().
 	 *
 	 * @param string[] $supplies
+	 * @param string[] $exempt_roles
 	 */
-	protected function decide( string $billing, string $shipping, string $postcode, array $supplies, bool $oss = false, string $number = '', string $status = '', string $ip = '', string $name = '' ): Decision {
+	protected function decide( string $billing, string $shipping, string $postcode, array $supplies, bool $oss = false, string $number = '', string $status = '', string $ip = '', string $name = '', array $exempt_roles = array() ): Decision {
 		$vat = '' === $number ? null : VatNumber::parse( $number, $billing );
 		return ( new Rules() )->decide(
 			new DecisionInput(
@@ -127,7 +128,8 @@ abstract class OrderTestCase extends IntegrationTestCase {
 					$supplies
 				),
 				'checkout',
-				'2026-10-17T12:00:00Z'
+				'2026-10-17T12:00:00Z',
+				$exempt_roles
 			)
 		);
 	}
