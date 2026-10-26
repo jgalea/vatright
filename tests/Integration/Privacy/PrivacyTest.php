@@ -213,4 +213,26 @@ class PrivacyTest extends PrivacyTestCase {
 		$this->assertStringContainsString( '7 years', $text );
 		$this->assertStringContainsString( 'cannot be met', $text );
 	}
+
+	public function test_eraser_clears_the_cache_entries_of_both_store_numbers(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'    => 'MT12345678',
+				'store_vat_number_gb' => 'GB980780684',
+			)
+		);
+		$this->vat_order( $this->year() );
+		$number = VatNumber::parse( 'DE123456789', '' );
+		$eu     = VatNumber::parse( 'MT12345678', '' );
+		$gb     = VatNumber::parse( 'GB980780684', '' );
+		$result = new ValidationResult( 'valid', 'vies', '2026-10-17T12:00:00Z', 'Acme GmbH' );
+		$this->cache->put( $number, $eu, $result );
+		$this->cache->put( $number, $gb, $result );
+
+		$this->privacy->erase( self::EMAIL );
+
+		$this->assertNull( $this->cache->get( $number, $eu ) );
+		$this->assertNull( $this->cache->get( $number, $gb ) );
+	}
 }

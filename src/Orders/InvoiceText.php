@@ -3,6 +3,7 @@
 namespace Vatright\Orders;
 
 use Vatright\Domain\ValidationResult;
+use Vatright\Settings;
 use WC_Order;
 
 /**
@@ -22,6 +23,16 @@ class InvoiceText {
 	 * @return array<string,array{label:string,value:string}>
 	 */
 	public function add_rows( $rows, $order ) {
+		if ( $order instanceof WC_Order ) {
+			$store = self::store_vat_number( $order );
+			if ( '' !== $store ) {
+				$rows['vatright_store_number'] = array(
+					'label' => __( 'Our VAT number', 'vatright' ),
+					'value' => esc_html( $store ),
+				);
+			}
+		}
+
 		$decision = $order instanceof WC_Order ? DecisionStore::get( $order ) : null;
 		if ( null === $decision || ( ! $decision->is_vat_exempt() && array() === $decision->legal_text() ) ) {
 			return $rows;
@@ -54,6 +65,31 @@ class InvoiceText {
 			);
 		}
 		return $rows;
+	}
+
+	/**
+	 * The store's own VAT number for this order: the UK number for a UK
+	 * customer, the EU one otherwise. Empty unless the store has both, since
+	 * a store with one number prints it nowhere today.
+	 */
+	public static function store_vat_number( WC_Order $order ): string {
+		$settings = Settings::get();
+		return $settings->has_separate_store_numbers() ? $settings->store_vat_number_for( self::customer_country( $order ) ) : '';
+	}
+
+	/**
+	 * The country the sale was decided for, or the billing country when no
+	 * decision was kept.
+	 */
+	public static function customer_country( WC_Order $order ): string {
+		$decision = DecisionStore::get( $order );
+		if ( null !== $decision ) {
+			$record   = $decision->to_array();
+			$resolved = $record['evidence']['resolved'] ?? null;
+			$billing  = (string) ( $record['customer']['billing']['country'] ?? '' );
+			return is_string( $resolved ) && '' !== $resolved ? $resolved : $billing;
+		}
+		return $order->get_billing_country();
 	}
 
 	public static function legal_text( string $key, ?WC_Order $order = null ): string {

@@ -4,6 +4,7 @@ namespace Vatright\Tests\Integration\Orders;
 
 use Vatright\Orders\DecisionStore;
 use Vatright\Orders\InvoiceText;
+use Vatright\Settings;
 use WC_Order;
 
 require_once __DIR__ . '/LifecycleTestCase.php';
@@ -144,5 +145,49 @@ class InvoiceTextTest extends LifecycleTestCase {
 		remove_all_filters( 'vatright_legal_text' );
 		add_filter( 'vatright_legal_text', '__return_empty_string' );
 		$this->assertSame( array(), preg_grep( '/^VAT note/', $this->values( $order ) ) );
+	}
+
+	private function two_numbers(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'    => 'MT12345678',
+				'store_vat_number_gb' => 'GB980780684',
+			)
+		);
+		Settings::reset();
+	}
+
+	private function decided_order( string $country, string $postcode ): WC_Order {
+		$order = $this->order( $country, $country, $postcode, array( 'digital' ) );
+		DecisionStore::apply( $order, $this->decide( $country, $country, $postcode, array( 'digital' ) ), 'checkout' );
+		$order->save();
+		return $this->fresh( $order );
+	}
+
+	public function test_a_uk_customer_is_given_the_gb_store_number_and_everyone_else_the_eu_one() {
+		$this->two_numbers();
+
+		$this->assertContains( 'Our VAT number: GB980780684', $this->values( $this->decided_order( 'GB', 'SW1A 1AA' ) ) );
+		$this->assertContains( 'Our VAT number: MT12345678', $this->values( $this->decided_order( 'DE', '10115' ) ) );
+		$this->assertContains( 'Our VAT number: MT12345678', $this->values( $this->exempt_order() ) );
+	}
+
+	public function test_the_store_number_row_follows_the_billing_country_of_an_order_without_a_decision() {
+		$this->two_numbers();
+
+		$this->assertContains( 'Our VAT number: GB980780684', $this->values( $this->order( 'GB', 'GB', 'SW1A 1AA', array( 'digital' ) ) ) );
+	}
+
+	public function test_a_store_with_one_number_gets_no_store_number_row() {
+		update_option( Settings::OPTION, array( 'store_vat_number' => 'MT12345678' ) );
+		Settings::reset();
+
+		$this->assertSame( array(), preg_grep( '/^Our VAT number/', $this->values( $this->decided_order( 'GB', 'SW1A 1AA' ) ) ) );
+		$this->assertSame( array(), preg_grep( '/^Our VAT number/', $this->values( $this->decided_order( 'DE', '10115' ) ) ) );
+
+		update_option( Settings::OPTION, array( 'store_vat_number_gb' => 'GB980780684' ) );
+		Settings::reset();
+		$this->assertSame( array(), preg_grep( '/^Our VAT number/', $this->values( $this->decided_order( 'GB', 'SW1A 1AA' ) ) ) );
 	}
 }

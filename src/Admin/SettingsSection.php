@@ -145,6 +145,13 @@ class SettingsSection {
 				array( 'desc_tip' => __( 'Sent to VIES as the requester, which returns a consultation number as proof of each check.', 'vatright' ) )
 			),
 			$this->field(
+				'store_vat_number_gb',
+				'text',
+				__( 'UK store VAT number', 'vatright' ),
+				$s->store_vat_number_gb(),
+				array( 'desc_tip' => __( 'Optional. Shown on orders from UK customers instead of the number above, and sent to HMRC as the requester. Leave it empty to use one number everywhere.', 'vatright' ) )
+			),
+			$this->field(
 				'report_currency',
 				'select',
 				__( 'Report currency', 'vatright' ),
@@ -217,6 +224,16 @@ class SettingsSection {
 			$this->checkbox( 'self_certification', __( 'Self-certification', 'vatright' ), __( 'Ask digital customers to confirm their country when the evidence conflicts', 'vatright' ), $s->self_certification() ),
 			$this->checkbox( 'self_certification_required', __( 'Require confirmation', 'vatright' ), __( 'Block checkout until the customer confirms their country (needs Self-certification)', 'vatright' ), $s->self_certification_required() ),
 			$this->checkbox( 'allow_domestic_exemption', __( 'Domestic B2B', 'vatright' ), __( 'Allow VAT exemption for valid numbers from the store country', 'vatright' ), $s->allow_domestic_exemption() ),
+			$this->field(
+				'refuse_name_mismatch',
+				'checkbox',
+				__( 'Company name', 'vatright' ),
+				$s->refuse_name_mismatch() ? 'yes' : 'no',
+				array(
+					'desc'     => __( 'Refuse the order when the company name doesn\'t match the registry', 'vatright' ),
+					'desc_tip' => __( 'The company name from the billing address is sent to VIES with the VAT number, and the customer is asked to use the name registered for that number. Spain\'s registry judges the name itself; for other countries the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms such as GmbH or S.A. When the registry returns no name, or no company name is entered, the order is accepted.', 'vatright' ),
+				)
+			),
 			$this->checkbox( 'registration_vat_field', __( 'Registration form', 'vatright' ), __( 'Add an optional VAT number field to the My Account registration form', 'vatright' ), $s->registration_vat_field() ),
 			$this->checkbox( 'notify_admin_on_revalidation', __( 'Revalidation emails', 'vatright' ), __( 'Email the admin when a number validates after the order was placed', 'vatright' ), $s->notify_admin_on_revalidation() ),
 			array(
@@ -353,6 +370,9 @@ class SettingsSection {
 		}
 		if ( 'store_vat_number' === $key ) {
 			return $this->sanitize_store_vat_number( (string) $value );
+		}
+		if ( 'store_vat_number_gb' === $key ) {
+			return $this->sanitize_uk_store_vat_number( (string) $value );
 		}
 		if ( 'hmrc_client_id' === $key ) {
 			$this->posted_client_id = (string) $value;
@@ -494,6 +514,19 @@ class SettingsSection {
 	private function sanitize_countries( $value ): array {
 		$known = array_keys( WC()->countries->get_countries() );
 		return array_values( array_unique( array_intersect( array_map( 'strtoupper', array_map( 'strval', (array) $value ) ), $known ) ) );
+	}
+
+	private function sanitize_uk_store_vat_number( string $raw ): string {
+		$raw = trim( $raw );
+		if ( '' === $raw ) {
+			return '';
+		}
+		$parsed = VatNumber::parse( $raw, 'GB' );
+		if ( null === $parsed || 'GB' !== $parsed->prefix() || ! FormatCheck::is_plausible( $parsed ) ) {
+			WC_Admin_Settings::add_error( __( 'The UK store VAT number does not look like a GB number, so it was not saved.', 'vatright' ) );
+			return Settings::get()->store_vat_number_gb();
+		}
+		return $parsed->canonical();
 	}
 
 	private function sanitize_store_vat_number( string $raw ): string {

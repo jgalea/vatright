@@ -175,7 +175,7 @@ class Privacy {
 		$removed  = false;
 		$retained = false;
 		$messages = array();
-		$store    = VatNumber::parse( Settings::get()->store_vat_number(), '' );
+		$stores   = Settings::get()->store_requesters();
 		$user     = get_user_by( 'email', $email );
 
 		// The account copy is not a VAT record (each order keeps its own), so it goes regardless of retention.
@@ -183,7 +183,9 @@ class Privacy {
 			$number = VatNumber::parse( $this->saved_number( $user->ID ), '' );
 			if ( null !== $number ) {
 				$this->cache->forget( $number, null );
-				$this->cache->forget( $number, $store );
+				foreach ( $stores as $store ) {
+					$this->cache->forget( $number, $store );
+				}
 			}
 			foreach ( self::ACCOUNT_META as $key ) {
 				delete_user_meta( $user->ID, $key );
@@ -199,7 +201,9 @@ class Privacy {
 			$number = VatNumber::parse( (string) $order->get_meta( DecisionStore::NUMBER_META ), '' );
 			if ( null !== $number ) {
 				$this->cache->forget( $number, null );
-				$this->cache->forget( $number, $store );
+				foreach ( $stores as $store ) {
+					$this->cache->forget( $number, $store );
+				}
 			}
 
 			if ( Retention::is_retained( $order ) ) {

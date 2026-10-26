@@ -110,7 +110,7 @@ class RestControllerTest extends ReportsTestCase {
 				'quarter' => '3',
 			)
 		)->get_data();
-		$this->assertSame( array( 'year', 'quarter', 'period', 'currency', 'rate_rule', 'rows', 'corrections', 'needs_correction', 'rates' ), array_keys( $oss ) );
+		$this->assertSame( array( 'kind', 'year', 'quarter', 'period', 'from', 'to', 'currency', 'rate_rule', 'rows', 'corrections', 'needs_correction', 'rates' ), array_keys( $oss ) );
 		$this->assertCount( 1, $oss['rows'] );
 		$this->assertSame( 'DE', $oss['rows'][0]['member_state'] );
 		$this->assertSame( 100.0, $oss['rows'][0]['taxable'] );

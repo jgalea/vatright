@@ -36,15 +36,25 @@ class RestController {
 	public function register_routes(): void {
 		$period = array(
 			'year'    => array(
-				'type'     => 'integer',
-				'required' => true,
-				'minimum'  => 2000,
-				'maximum'  => 2100,
+				'type'    => 'integer',
+				'minimum' => 2000,
+				'maximum' => 2100,
 			),
 			'quarter' => array(
-				'type'     => 'integer',
-				'required' => true,
-				'enum'     => array( 1, 2, 3, 4 ),
+				'type' => 'integer',
+				'enum' => array( 1, 2, 3, 4 ),
+			),
+			'month'   => array(
+				'type' => 'integer',
+				'enum' => array( 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ),
+			),
+			'from'    => array(
+				'type'    => 'string',
+				'pattern' => '^\d{4}-\d{2}-\d{2}$',
+			),
+			'to'      => array(
+				'type'    => 'string',
+				'pattern' => '^\d{4}-\d{2}-\d{2}$',
 			),
 		);
 
@@ -85,7 +95,7 @@ class RestController {
 				'callback'            => array( $this, 'intrastat' ),
 				'permission_callback' => array( $this, 'can_view_reports' ),
 				'args'                => array(
-					'year'  => $period['year'],
+					'year'  => array_merge( $period['year'], array( 'required' => true ) ),
 					'month' => array(
 						'type'     => 'integer',
 						'required' => true,
@@ -121,11 +131,32 @@ class RestController {
 	}
 
 	/**
+	 * Either from and to, or year and month, or year and quarter, in that order of precedence.
+	 *
+	 * @return ReportPeriod|WP_Error
+	 */
+	private function period( WP_REST_Request $request ) {
+		$period = ReportPeriod::from_args( $request->get_params() );
+		if ( null === $period ) {
+			return new WP_Error(
+				'vatright_bad_period',
+				__( 'Give a report period: from and to dates, or year with month, or year with quarter.', 'vatright' ),
+				array( 'status' => 400 )
+			);
+		}
+		return $period;
+	}
+
+	/**
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function oss( WP_REST_Request $request ) {
+		$period = $this->period( $request );
+		if ( $period instanceof WP_Error ) {
+			return $period;
+		}
 		try {
-			return rest_ensure_response( $this->oss->build( (int) $request['year'], (int) $request['quarter'], (string) $request['currency'] ) );
+			return rest_ensure_response( $this->oss->build_for( $period, (string) $request['currency'] ) );
 		} catch ( RuntimeException $e ) {
 			return new WP_Error( 'vatright_rate_unavailable', $e->getMessage(), array( 'status' => 502 ) );
 		}
@@ -135,10 +166,12 @@ class RestController {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function ec_sales_list( WP_REST_Request $request ) {
-		$year    = (int) $request['year'];
-		$quarter = (int) $request['quarter'];
+		$period = $this->period( $request );
+		if ( $period instanceof WP_Error ) {
+			return $period;
+		}
 		try {
-			$rows = $this->esl->build( $year, $quarter );
+			$rows = $this->esl->build_for( $period );
 		} catch ( IncompleteReport $e ) {
 			return new WP_Error(
 				'vatright_incomplete_report',
@@ -151,9 +184,12 @@ class RestController {
 		}
 		return rest_ensure_response(
 			array(
-				'year'    => $year,
-				'quarter' => $quarter,
-				'period'  => OssReport::period( $year, $quarter ),
+				'year'    => $period->year(),
+				'quarter' => $period->quarter_number(),
+				'period'  => $period->label(),
+				'kind'    => $period->kind(),
+				'from'    => $period->start(),
+				'to'      => $period->end(),
 				'rows'    => $rows,
 			)
 		);

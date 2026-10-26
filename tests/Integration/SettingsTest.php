@@ -69,4 +69,53 @@ class SettingsTest extends IntegrationTestCase {
 		update_option( Settings::OPTION, array( 'b2b_only_countries' => array( 'de', 'FR', 'DE', '', 'x' ) ) );
 		$this->assertSame( array( 'DE', 'FR' ), Settings::get()->b2b_only_countries() );
 	}
+
+	public function test_a_customer_gets_the_number_for_their_country(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'    => 'MT12345678',
+				'store_vat_number_gb' => 'GB980780684',
+			)
+		);
+		$s = Settings::get();
+
+		$this->assertSame( 'GB980780684', $s->store_vat_number_for( 'GB' ) );
+		$this->assertSame( 'GB980780684', $s->store_vat_number_for( 'gb' ) );
+		$this->assertSame( 'MT12345678', $s->store_vat_number_for( 'DE' ) );
+		$this->assertSame( 'MT12345678', $s->store_vat_number_for( '' ) );
+		$this->assertTrue( $s->has_separate_store_numbers() );
+	}
+
+	public function test_a_store_with_one_number_quotes_it_to_everyone(): void {
+		update_option( Settings::OPTION, array( 'store_vat_number' => 'MT12345678' ) );
+		$this->assertSame( 'MT12345678', Settings::get()->store_vat_number_for( 'GB' ) );
+		$this->assertFalse( Settings::get()->has_separate_store_numbers() );
+
+		update_option( Settings::OPTION, array( 'store_vat_number_gb' => 'GB980780684' ) );
+		$this->assertSame( 'GB980780684', Settings::get()->store_vat_number_for( 'DE' ) );
+		$this->assertFalse( Settings::get()->has_separate_store_numbers() );
+	}
+
+	public function test_the_requesters_are_the_parsed_numbers_eu_first(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'    => 'MT12345678',
+				'store_vat_number_gb' => 'GB980780684',
+			)
+		);
+		$this->assertSame(
+			array( 'MT12345678', 'GB980780684' ),
+			array_map(
+				static function ( $n ) {
+					return $n->canonical();
+				},
+				Settings::get()->store_requesters()
+			)
+		);
+
+		update_option( Settings::OPTION, array() );
+		$this->assertSame( array(), Settings::get()->store_requesters() );
+	}
 }

@@ -190,6 +190,147 @@ class ViesTest extends TestCase {
 		$this->assertNull( $result->name() );
 	}
 
+	public function test_a_name_the_registry_rejects_is_flagged_on_a_valid_result(): void {
+		$result = $this->vies()->check_named( $this->number( 'ESA15075062' ), null, 'Totally Different Bakery' );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( 'name_mismatch', $result->detail() );
+	}
+
+	public function test_a_name_the_registry_accepts_is_not_flagged(): void {
+		$result = $this->vies()->check_named( $this->number( 'ESA15075062' ), null, 'Industria de Diseno Textil SA' );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( '', $result->detail() );
+	}
+
+	/**
+	 * Recorded from the live service: only Spain answered a name check; every
+	 * other country returned NOT_PROCESSED even for a name that cannot match.
+	 * Where the response carries no registered name there is nothing to compare.
+	 *
+	 * @return array<string,array{string,string}>
+	 */
+	public function countries_without_name_matching(): array {
+		return array(
+			'Germany' => array( 'DE114103379', 'Totally Different Bakery' ),
+		);
+	}
+
+	/**
+	 * @dataProvider countries_without_name_matching
+	 */
+	public function test_a_country_without_name_matching_never_flags_a_mismatch( string $number, string $name ): void {
+		$result = $this->vies()->check_named( $this->number( $number ), null, $name );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( '', $result->detail() );
+	}
+
+	public function test_no_verdict_and_a_different_registered_name_is_a_local_mismatch(): void {
+		$result = $this->vies()->check_named( $this->number( 'NL820646660B01' ), null, 'Totally Different Bakery' );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( 'name_mismatch_local', $result->detail() );
+		$this->assertSame( 'ABN AMRO BANK N.V.', $result->name() );
+	}
+
+	public function test_no_verdict_and_the_same_registered_name_is_no_mismatch(): void {
+		$result = $this->vies()->check_named( $this->number( 'NL820646660B01' ), null, 'ABN AMRO Bank' );
+
+		$this->assertSame( '', $result->detail() );
+	}
+
+	public function test_no_name_typed_means_no_local_comparison(): void {
+		$this->assertSame( '', $this->vies()->check( $this->number( 'NL820646660B01' ), null )->detail() );
+	}
+
+	public function test_a_registry_verdict_is_not_second_guessed_locally(): void {
+		$body = '{"countryCode":"ES","vatNumber":"A15075062","valid":true,"name":"INDUSTRIA DE DISENO TEXTIL SA","traderNameMatch":"VALID"}';
+		$this->assertSame( '', $this->replying( 200, $body )->check_named( $this->number( 'ESA15075062' ), null, 'Totally Different Bakery' )->detail() );
+
+		$body = '{"countryCode":"ES","vatNumber":"A15075062","valid":true,"name":"INDUSTRIA DE DISENO TEXTIL SA","traderNameMatch":"INVALID"}';
+		$this->assertSame( 'name_mismatch', $this->replying( 200, $body )->check_named( $this->number( 'ESA15075062' ), null, 'Industria de Diseno Textil' )->detail() );
+	}
+
+	/**
+	 * @return array<string,array{string}>
+	 */
+	public function unusable_names(): array {
+		return array(
+			'dashes'      => array( '"name":"---"' ),
+			'empty'       => array( '"name":""' ),
+			'absent'      => array( '"address":"x"' ),
+			'placeholder' => array( '"name":"N/A"' ),
+		);
+	}
+
+	/**
+	 * @dataProvider unusable_names
+	 */
+	public function test_without_a_usable_registered_name_nothing_is_flagged( string $field ): void {
+		$result = $this->replying( 200, '{"valid":true,"traderNameMatch":"NOT_PROCESSED",' . $field . '}' )->check_named( $this->number( 'NL820646660B01' ), null, 'Totally Different Bakery' );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( '', $result->detail() );
+	}
+
+	/**
+	 * @return array<string,array{string}>
+	 */
+	public function non_verdicts(): array {
+		return array(
+			'not processed' => array( '"traderNameMatch":"NOT_PROCESSED"' ),
+			'valid'         => array( '"traderNameMatch":"VALID"' ),
+			'absent'        => array( '"traderStreet":"---"' ),
+			'empty'         => array( '"traderNameMatch":""' ),
+			'unknown value' => array( '"traderNameMatch":"MAYBE"' ),
+			'null'          => array( '"traderNameMatch":null' ),
+		);
+	}
+
+	/**
+	 * @dataProvider non_verdicts
+	 */
+	public function test_only_an_explicit_invalid_name_match_is_a_mismatch( string $field ): void {
+		$result = $this->replying( 200, '{"countryCode":"NL","vatNumber":"820646660B01","valid":true,' . $field . '}' )->check_named( $this->number( 'NL820646660B01' ), null, 'Acme' );
+
+		$this->assertSame( ValidationResult::VALID, $result->status() );
+		$this->assertSame( '', $result->detail() );
+	}
+
+	public function test_a_name_mismatch_on_a_number_the_registry_calls_invalid_stays_invalid(): void {
+		$result = $this->replying( 200, '{"valid":false,"traderNameMatch":"INVALID"}' )->check_named( $this->number( 'ESA15075062' ), null, 'Acme' );
+
+		$this->assertSame( ValidationResult::INVALID, $result->status() );
+		$this->assertSame( '', $result->detail() );
+	}
+
+	public function test_the_company_name_is_sent_only_when_one_is_given(): void {
+		$transport = new class() implements HttpTransport {
+			/** @var string[] */
+			public $bodies = array();
+
+			public function request( string $method, string $url, string $body = '', array $headers = array(), int $timeout = 5 ): array {
+				$this->bodies[] = $body;
+				return array(
+					'status' => 200,
+					'body'   => '{"valid":true}',
+					'error'  => '',
+				);
+			}
+		};
+		$vies      = new Vies( $transport );
+
+		$vies->check( $this->number( 'ESA15075062' ), null );
+		$vies->check_named( $this->number( 'ESA15075062' ), null, '' );
+		$vies->check_named( $this->number( 'ESA15075062' ), null, 'Industria de Diseno Textil SA' );
+
+		$this->assertStringNotContainsString( 'traderName', $transport->bodies[0] );
+		$this->assertStringNotContainsString( 'traderName', $transport->bodies[1] );
+		$this->assertStringContainsString( '"traderName":"Industria de Diseno Textil SA"', $transport->bodies[2] );
+	}
+
 	/**
 	 * Expected statuses are what VIES answered when the fixtures were recorded.
 	 *

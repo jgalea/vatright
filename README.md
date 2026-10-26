@@ -22,6 +22,9 @@ The plugin decides the VAT treatment of each order, applies it through WooCommer
 - VAT column on the orders list (number, validation status, treatment) with a pending/flagged filter, on HPOS and legacy orders.
 - Admin email when cross-border EU consumer sales reach a share of the OSS threshold (80% by default) and again when they pass it.
 - OSS return and EC Sales List reports with CSV export, plus REST endpoints.
+- OSS return and EC Sales List reports for a quarter, a single month or any date range, in the screen, the CSV and the REST endpoints.
+- Optional refusal of orders whose company name doesn't match the registry's name for the VAT number, on the block and the classic checkout. Off by default. Spain's VIES verdict decides where it gives one; otherwise the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms. No returned name, no refusal.
+- Separate EU and UK store VAT numbers: UK customers see the UK number on their orders and in the admin record, everyone else the EU number, and each registry gets its own as the requester. With one number set nothing changes.
 - Optional business-only mode that requires a valid VAT number at checkout, everywhere, in the EU or in chosen countries.
 - Monthly INTRASTAT dispatch report for physical goods, with per-product CN8 code, country of origin and net mass, and CSV export.
 - Personal data exporters, erasers and a retention setting.

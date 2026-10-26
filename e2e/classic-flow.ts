@@ -26,6 +26,11 @@ export async function fillCustomer( page: Page, customer: Customer ) {
 	await page.locator( '#billing_phone' ).fill( TEST_CUSTOMER.phone );
 	await page.locator( '#billing_email' ).fill( TEST_CUSTOMER.email );
 	await updated( page, () => page.locator( '#billing_country' ).selectOption( customer.country ) );
+	if ( customer.state ) {
+		await page.locator( '#billing_state' ).evaluate( ( el, value ) => {
+			( window as any ).jQuery( el ).val( value ).trigger( 'change' );
+		}, customer.state );
+	}
 	await changePostcode( page, customer.postcode );
 	if ( customer.vat ) {
 		await enterVat( page, customer.vat );

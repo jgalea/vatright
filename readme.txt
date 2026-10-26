@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.5
+Stable tag: 0.1.6
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -33,6 +33,9 @@ Settings live under WooCommerce > Settings > Tax > VAT Right.
 * A VAT column on the orders list shows each order's VAT number, its validation status and the treatment applied, with a filter for orders pending validation or flagged. Works with HPOS and the legacy order screen.
 * Emails the store admin when cross-border EU consumer sales reach a share of the EUR 10,000 OSS threshold (80% by default) and again when they pass it, once a year each. Edit or turn it off under WooCommerce > Settings > Emails.
 * Quarterly OSS return and EC Sales List reports with CSV export, in EUR. Orders in other currencies are converted at the ECB reference rate.
+* OSS return and EC Sales List for a single month or any date range as well as a quarter, in the screen, the CSV and the REST endpoints.
+* Optional setting to refuse an order when the company name doesn't match the registry's name for the VAT number, on the block and the classic checkout. Spain's VIES verdict decides where it gives one; otherwise the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms. When no name is returned, the order is accepted.
+* Separate EU and UK store VAT numbers: UK customers see the UK number on their orders and in the admin record, everyone else the EU number, and each registry gets its own as the requester. With one number set nothing changes.
 * Optional business-only mode: customers must give a valid VAT number to order, everywhere, in the EU or in countries you choose, on the block and classic checkout.
 * Monthly INTRASTAT report of physical goods dispatched to other member states, with CN8 code, country of origin and net mass per product, and CSV export. The CSV is the data to file; thresholds and file formats differ per member state.
 * REST endpoints for both reports and for the VAT data of a single order, restricted by capability.
@@ -116,6 +119,11 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 5. The EU VAT reports: OSS return and EC Sales List.
 
 == Changelog ==
+
+= 0.1.6 =
+* New: OSS return and EC Sales List reports for a month or any date range, as well as by quarter, in the screen, CSV and REST.
+* New: option to refuse an order when the company name doesn't match the registry. VIES's own verdict decides where it gives one; otherwise the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms. Off by default.
+* New: a separate UK store VAT number, used for UK customers on orders, emails and HMRC checks.
 
 = 0.1.5 =
 * New: option to block checkout until the customer confirms their country when the billing and IP countries disagree, on the block and classic checkouts. Off by default.

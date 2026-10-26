@@ -1,0 +1,13 @@
+{
+  "_recorded_at": "2026-10-26T18:22:12+00:00",
+  "request": {
+    "method": "POST",
+    "url": "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
+    "body_contains": "\"vatNumber\":\"A15075062\",\"traderName\":\"Totally Different Bakery\""
+  },
+  "response": {
+    "status": 200,
+    "body": "{\n  \"countryCode\" : \"ES\",\n  \"vatNumber\" : \"A15075062\",\n  \"requestDate\" : \"2026-10-26T18:22:12.414Z\",\n  \"valid\" : true,\n  \"requestIdentifier\" : \"\",\n  \"name\" : \"---\",\n  \"address\" : \"---\",\n  \"traderName\" : \"Totally Different Bakery\",\n  \"traderNameMatch\" : \"INVALID\",\n  \"traderStreetMatch\" : \"NOT_PROCESSED\",\n  \"traderPostalCodeMatch\" : \"NOT_PROCESSED\",\n  \"traderCityMatch\" : \"NOT_PROCESSED\",\n  \"traderCompanyTypeMatch\" : \"NOT_PROCESSED\"\n}",
+    "error": ""
+  }
+}

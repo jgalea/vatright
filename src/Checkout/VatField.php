@@ -251,6 +251,9 @@ class VatField {
 	 * Tells the shopper where the number goes before they enter it.
 	 */
 	public static function disclosure(): string {
+		if ( Settings::get()->refuse_name_mismatch() ) {
+			return __( 'Your VAT number and company name are sent to the official tax registry for its country, such as the EU\'s VIES service, to confirm them before VAT is removed.', 'vatright' );
+		}
 		return __( 'Your VAT number is sent to the official tax registry for its country, such as the EU\'s VIES service, to confirm it before VAT is removed.', 'vatright' );
 	}
 
@@ -428,11 +431,11 @@ class VatField {
 	 * and the classic order review call this, so the next totals calculation
 	 * finds the verdict in the cache.
 	 */
-	public function set_number( WC_Customer $customer, string $raw, string $billing_country ): void {
+	public function set_number( WC_Customer $customer, string $raw, string $billing_country, string $company = '' ): void {
 		$customer->update_meta_data( InputGatherer::NUMBER_META, self::normalise( $raw ) );
 		$number = VatNumber::parse( $raw, $billing_country );
 		if ( null !== $number ) {
-			$this->validator->validate_for_visitor( $number, 'update' );
+			$this->validator->validate_for_visitor( $number, 'update', NameMismatch::lookup_name( $company ) );
 		}
 	}
 
@@ -447,7 +450,7 @@ class VatField {
 		$billing = strtoupper( (string) ( $posted['billing_country'] ?? $posted['country'] ?? $customer->get_billing_country() ) );
 
 		if ( array_key_exists( self::CLASSIC_FIELD, $posted ) ) {
-			$this->set_number( $customer, (string) $posted[ self::CLASSIC_FIELD ], $billing );
+			$this->set_number( $customer, (string) $posted[ self::CLASSIC_FIELD ], $billing, (string) ( $posted['billing_company'] ?? $customer->get_billing_company() ) );
 			if ( $customer->get_id() ) {
 				$customer->update_meta_data( '_wc_other/' . self::FIELD_ID, self::normalise( $posted[ self::CLASSIC_FIELD ] ) );
 			}

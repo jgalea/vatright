@@ -5,6 +5,7 @@ namespace Vatright\Tests\Integration\Orders;
 use Vatright\Orders\DecisionStore;
 use Vatright\Orders\MetaBox;
 use Vatright\Orders\Revalidation;
+use Vatright\Settings;
 use RuntimeException;
 
 require_once __DIR__ . '/LifecycleTestCase.php';
@@ -211,5 +212,39 @@ class MetaBoxTest extends LifecycleTestCase {
 			$this->assertNotSame( $flag, MetaBox::flag_text( $flag ), "$flag has no wording" );
 		}
 		$this->assertInstanceOf( Revalidation::class, $this->revalidation() );
+	}
+
+	public function test_the_admin_record_names_the_store_number_used_for_the_customers_country() {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'    => 'MT12345678',
+				'store_vat_number_gb' => 'GB980780684',
+			)
+		);
+		Settings::reset();
+		$uk = $this->order( 'GB', 'GB', 'SW1A 1AA', array( 'digital' ) );
+		DecisionStore::apply( $uk, $this->decide( 'GB', 'GB', 'SW1A 1AA', array( 'digital' ) ), 'checkout' );
+		$uk->save();
+		$de = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
+		DecisionStore::apply( $de, $this->decide( 'DE', 'DE', '10115', array( 'digital' ) ), 'checkout' );
+		$de->save();
+
+		$uk_html = $this->html( $this->fresh( $uk ) );
+		$de_html = $this->html( $this->fresh( $de ) );
+
+		$this->assertMatchesRegularExpression( '#Store VAT number</th><td>GB980780684</td>#', $uk_html );
+		$this->assertStringNotContainsString( 'MT12345678', $uk_html );
+		$this->assertMatchesRegularExpression( '#Store VAT number</th><td>MT12345678</td>#', $de_html );
+	}
+
+	public function test_the_admin_record_has_no_store_number_row_with_one_number() {
+		update_option( Settings::OPTION, array( 'store_vat_number' => 'MT12345678' ) );
+		Settings::reset();
+		$order = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
+		DecisionStore::apply( $order, $this->decide( 'DE', 'DE', '10115', array( 'digital' ) ), 'checkout' );
+		$order->save();
+
+		$this->assertStringNotContainsString( 'Store VAT number', $this->html( $this->fresh( $order ) ) );
 	}
 }

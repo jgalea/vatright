@@ -6,7 +6,7 @@ use Vatright\Domain\ValidationResult;
 use Vatright\Domain\VatNumber;
 use Throwable;
 
-class Vies implements Registry {
+class Vies implements NameMatching {
 
 	const BASE_URL = 'https://ec.europa.eu/taxation_customs/vies/rest-api';
 
@@ -33,6 +33,12 @@ class Vies implements Registry {
 		return $this->check_named( $n, $requester, '' );
 	}
 
+	/**
+	 * Only Spain answered a name check when this was recorded against the live
+	 * service; every other country returns NOT_PROCESSED however wrong the
+	 * name is. Where the registry gave no verdict but returned the company's
+	 * name, the typed name is compared with it here instead.
+	 */
 	public function check_named( VatNumber $n, ?VatNumber $requester, string $trader_name ): ValidationResult {
 		try {
 			$payload = array(
@@ -57,7 +63,7 @@ class Vies implements Registry {
 				),
 				$this->timeout
 			);
-			return $this->parse( $response );
+			return $this->parse( $response, $trader_name );
 		} catch ( Throwable $e ) {
 			return $this->unavailable( 'exception' );
 		}
@@ -96,7 +102,7 @@ class Vies implements Registry {
 	 *
 	 * @param array{status:int,body:string,error:string} $response
 	 */
-	private function parse( array $response ): ValidationResult {
+	private function parse( array $response, string $trader_name = '' ): ValidationResult {
 		if ( '' !== $response['error'] || 0 === $response['status'] ) {
 			return $this->unavailable( 'transport_error' );
 		}
@@ -125,15 +131,23 @@ class Vies implements Registry {
 		$checked_at = isset( $data['requestDate'] ) && is_string( $data['requestDate'] ) ? $data['requestDate'] : gmdate( 'Y-m-d\TH:i:s\Z' );
 
 		if ( true === ( $data['valid'] ?? null ) ) {
+			$name_match = $data['traderNameMatch'] ?? '';
+			$name       = $this->text( $data, 'name' );
+			$detail     = '';
+			if ( 'INVALID' === $name_match ) {
+				$detail = self::MISMATCH;
+			} elseif ( 'VALID' !== $name_match && '' !== $trader_name && ! CompanyName::matches( $trader_name, $name ) ) {
+				$detail = self::MISMATCH_LOCAL;
+			}
 			return new ValidationResult(
 				ValidationResult::VALID,
 				$this->id(),
 				$checked_at,
-				$this->text( $data, 'name' ),
+				$name,
 				$this->text( $data, 'address' ),
 				$this->text( $data, 'requestIdentifier' ),
 				false,
-				'INVALID' === ( $data['traderNameMatch'] ?? '' ) ? 'name_mismatch' : ''
+				$detail
 			);
 		}
 		if ( false === ( $data['valid'] ?? null ) ) {

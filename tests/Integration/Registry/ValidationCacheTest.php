@@ -165,4 +165,33 @@ class ValidationCacheTest extends IntegrationTestCase {
 		$this->assertSame( 0, $response['status'] );
 		$this->assertSame( 'cURL error 28: timed out', $response['error'] );
 	}
+
+	public function test_a_name_verdict_round_trips_per_name_and_number(): void {
+		$cache = new ValidationCache( Settings::get() );
+
+		$this->assertNull( $cache->get_name_verdict( $this->number, null, 'Acme' ) );
+
+		$cache->put_name_verdict( $this->number, null, 'Acme', 'mismatch' );
+
+		$this->assertSame( 'mismatch', $cache->get_name_verdict( $this->number, null, 'Acme' ) );
+		$this->assertSame( 'mismatch', $cache->get_name_verdict( $this->number, null, ' acme ' ), 'Case and surrounding space do not make a new name.' );
+		$this->assertNull( $cache->get_name_verdict( $this->number, null, 'Other' ) );
+		$this->assertNull( $cache->get_name_verdict( $this->number, $this->number, 'Acme' ) );
+		$this->assertNull( $cache->get( $this->number, null ), 'A verdict is not a validation result.' );
+	}
+
+	public function test_a_mismatch_is_kept_for_an_hour_and_a_match_for_the_valid_ttl(): void {
+		$cache = new ValidationCache( Settings::get() );
+		$cache->put_name_verdict( $this->number, null, 'Wrong', 'mismatch' );
+		$cache->put_name_verdict( $this->number, null, 'Right', 'ok' );
+		$wrong = $this->name_key( 'Wrong' );
+		$right = $this->name_key( 'Right' );
+
+		$this->assertEqualsWithDelta( HOUR_IN_SECONDS, $this->timeout_of( $wrong ), 5 );
+		$this->assertEqualsWithDelta( 3 * DAY_IN_SECONDS, $this->timeout_of( $right ), 5 );
+	}
+
+	private function name_key( string $name ): string {
+		return ValidationCache::PREFIX . 'n_' . md5( $this->number->canonical() . '||' . strtolower( $name ) );
+	}
 }

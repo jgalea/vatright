@@ -6,6 +6,8 @@ export const NUMBERS = {
 	invalidDe: 'DE123475223',
 	outageDe: 'DE129273398',
 	validXi: 'XI980780684',
+	validEs: 'ESA15075062',
+	validNl: 'NL820646660B01',
 };
 
 export const PRODUCTS = { book: 10, ebook: 11, consulting: 12 };
@@ -73,6 +75,7 @@ export interface Customer {
 	country: string;
 	postcode: string;
 	vat?: string;
+	state?: string;
 }
 
 export const TEST_CUSTOMER = {

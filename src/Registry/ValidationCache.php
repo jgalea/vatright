@@ -8,7 +8,10 @@ use Vatright\Settings;
 
 class ValidationCache {
 
-	const PREFIX = 'vatright_v_';
+	const PREFIX              = 'vatright_v_';
+	const NAME_OK             = 'ok';
+	const NAME_MISMATCH       = 'mismatch';
+	const NAME_MISMATCH_LOCAL = 'mismatch_local';
 
 	/** @var Settings */
 	private $settings;
@@ -33,6 +36,22 @@ class ValidationCache {
 		set_transient( $this->key( $n, $requester ), $result->to_array(), $ttl );
 	}
 
+	/**
+	 * What the registry said about a company name for a number: 'ok',
+	 * 'mismatch' (its own verdict) or 'mismatch_local' (found by comparing with
+	 * the name it returned). Kept apart from the validation result so a lookup that
+	 * carries no name never sees it.
+	 */
+	public function get_name_verdict( VatNumber $n, ?VatNumber $requester, string $name ): ?string {
+		$stored = get_transient( $this->name_key( $n, $requester, $name ) );
+		return in_array( $stored, array( self::NAME_OK, self::NAME_MISMATCH, self::NAME_MISMATCH_LOCAL ), true ) ? $stored : null;
+	}
+
+	public function put_name_verdict( VatNumber $n, ?VatNumber $requester, string $name, string $verdict ): void {
+		$ttl = self::NAME_OK !== $verdict ? HOUR_IN_SECONDS : $this->settings->cache_ttl_valid_days() * DAY_IN_SECONDS;
+		set_transient( $this->name_key( $n, $requester, $name ), $verdict, $ttl );
+	}
+
 	public function forget( VatNumber $n, ?VatNumber $requester ): void {
 		delete_transient( $this->key( $n, $requester ) );
 	}
@@ -48,6 +67,10 @@ class ValidationCache {
 			default:
 				return 0;
 		}
+	}
+
+	private function name_key( VatNumber $n, ?VatNumber $requester, string $name ): string {
+		return self::PREFIX . 'n_' . md5( $n->canonical() . '|' . ( null === $requester ? '' : $requester->canonical() ) . '|' . strtolower( trim( $name ) ) );
 	}
 
 	private function key( VatNumber $n, ?VatNumber $requester ): string {

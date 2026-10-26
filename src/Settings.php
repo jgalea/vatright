@@ -2,6 +2,8 @@
 
 namespace Vatright;
 
+use Vatright\Domain\VatNumber;
+
 class Settings {
 
 	const OPTION = 'vatright_settings';
@@ -26,6 +28,7 @@ class Settings {
 	public static function defaults(): array {
 		return array(
 			'store_vat_number'             => '',
+			'store_vat_number_gb'          => '',
 			'outage_policy'                => 'charge',
 			'b2b_only'                     => 'off',
 			'b2b_only_countries'           => array(),
@@ -44,11 +47,51 @@ class Settings {
 			'delete_data_on_uninstall'     => false,
 			'registration_vat_field'       => false,
 			'exempt_roles'                 => array(),
+			'refuse_name_mismatch'         => false,
 		);
 	}
 
 	public function store_vat_number(): string {
 		return (string) $this->value( 'store_vat_number' );
+	}
+
+	public function store_vat_number_gb(): string {
+		return (string) $this->value( 'store_vat_number_gb' );
+	}
+
+	/**
+	 * The number the store quotes to a customer of this country: the UK
+	 * number for a UK customer, the EU number for everyone else. A store with
+	 * only one of the two quotes it to all.
+	 */
+	public function store_vat_number_for( string $country ): string {
+		$eu = $this->store_vat_number();
+		$gb = $this->store_vat_number_gb();
+		if ( 'GB' === strtoupper( $country ) ) {
+			return '' !== $gb ? $gb : $eu;
+		}
+		return '' !== $eu ? $eu : $gb;
+	}
+
+	public function has_separate_store_numbers(): bool {
+		return '' !== $this->store_vat_number() && '' !== $this->store_vat_number_gb();
+	}
+
+	/**
+	 * The store's numbers as parsed VAT numbers, EU first, for registries to
+	 * take as the requester.
+	 *
+	 * @return VatNumber[]
+	 */
+	public function store_requesters(): array {
+		$numbers = array();
+		foreach ( array( $this->store_vat_number(), $this->store_vat_number_gb() ) as $raw ) {
+			$parsed = VatNumber::parse( $raw, '' );
+			if ( null !== $parsed ) {
+				$numbers[] = $parsed;
+			}
+		}
+		return $numbers;
 	}
 
 	public function outage_policy(): string {
@@ -129,6 +172,10 @@ class Settings {
 
 	public function registration_vat_field(): bool {
 		return (bool) $this->value( 'registration_vat_field' );
+	}
+
+	public function refuse_name_mismatch(): bool {
+		return (bool) $this->value( 'refuse_name_mismatch' );
 	}
 
 	/**

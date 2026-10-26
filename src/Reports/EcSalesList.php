@@ -13,17 +13,18 @@ class EcSalesList {
 	 * @return array<int,array{customer_vat:string,country:string,type:string,net_eur:float}>
 	 * @throws IncompleteReport When an order in the period has no EUR amount.
 	 */
-	public function build( int $year, int $quarter ): array {
+	public function build_for( ReportPeriod $period ): array {
 		global $wpdb;
 
-		$table = Schema::ledger_table();
+		$table                    = Schema::ledger_table();
+		list( $sale, $sale_args ) = $period->sale_condition( $table, wp_timezone() );
 		// phpcs:disable WordPress.DB, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$missing = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT DISTINCT order_id FROM {$table}
-				WHERE scheme IN ('intra_eu_goods', 'reverse_charge_services') AND customer_vat IS NOT NULL AND relates_to_period = %s AND net_eur IS NULL
+				WHERE scheme IN ('intra_eu_goods', 'reverse_charge_services') AND customer_vat IS NOT NULL AND {$sale} AND net_eur IS NULL
 				ORDER BY order_id",
-				OssReport::period( $year, $quarter )
+				$sale_args
 			)
 		);
 		if ( array() !== $missing ) {
@@ -33,10 +34,10 @@ class EcSalesList {
 			$wpdb->prepare(
 				"SELECT customer_vat, IF(supply_type = 'goods', 'goods', 'services') AS type, SUM(net_eur) AS net_eur
 				FROM {$table}
-				WHERE scheme IN ('intra_eu_goods', 'reverse_charge_services') AND customer_vat IS NOT NULL AND relates_to_period = %s
+				WHERE scheme IN ('intra_eu_goods', 'reverse_charge_services') AND customer_vat IS NOT NULL AND {$sale}
 				GROUP BY customer_vat, IF(supply_type = 'goods', 'goods', 'services')
 				ORDER BY customer_vat, type",
-				OssReport::period( $year, $quarter )
+				$sale_args
 			),
 			ARRAY_A
 		);
@@ -55,6 +56,14 @@ class EcSalesList {
 			}
 		}
 		return $rows;
+	}
+
+	/**
+	 * @return array<int,array{customer_vat:string,country:string,type:string,net_eur:float}>
+	 * @throws IncompleteReport When an order in the quarter has no EUR amount.
+	 */
+	public function build( int $year, int $quarter ): array {
+		return $this->build_for( ReportPeriod::quarter( $year, $quarter ) );
 	}
 
 	/**

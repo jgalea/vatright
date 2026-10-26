@@ -1,0 +1,6 @@
+"Member state of consumption","VAT rate %","Supply type","Taxable amount (EUR)","VAT amount (EUR)"
+DE,19,goods,150.00,28.50
+FR,20,goods,200.00,40.00
+
+"Exchange rates used: ECB reference rate of the last day of the period",Period,"Rate date","Units per EUR"
+USD,2026-08-01_2026-09-30,2026-09-30,1.1355

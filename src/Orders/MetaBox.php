@@ -128,6 +128,7 @@ class MetaBox {
 			__( 'Billing company', 'vatright' )        => $order->get_billing_company(),
 			__( 'VAT number as typed', 'vatright' )    => (string) ( $record['vat_number']['raw'] ?? '' ),
 			__( 'VAT number', 'vatright' )             => (string) ( $record['vat_number']['canonical'] ?? '' ),
+			__( 'Store VAT number', 'vatright' )       => InvoiceText::store_vat_number( $order ),
 			__( 'Registry answer', 'vatright' )        => (string) ( $validation['status'] ?? '' ),
 			__( 'Registry', 'vatright' )               => (string) ( $validation['registry'] ?? '' ),
 			__( 'Registered name', 'vatright' )        => (string) ( $validation['name'] ?? '' ),

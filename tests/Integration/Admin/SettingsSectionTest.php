@@ -184,6 +184,29 @@ class SettingsSectionTest extends IntegrationTestCase {
 		$this->assertFalse( Settings::get()->self_certification_required() );
 	}
 
+	public function test_the_name_mismatch_refusal_is_off_by_default_and_saves(): void {
+		$this->assertFalse( Settings::get()->refuse_name_mismatch() );
+
+		$this->save( array( 'refuse_name_mismatch' => 'yes' ) );
+		$this->assertTrue( Settings::get()->refuse_name_mismatch() );
+		$this->save( array() );
+		$this->assertFalse( Settings::get()->refuse_name_mismatch() );
+	}
+
+	public function test_the_name_mismatch_checkbox_is_worded_and_explained(): void {
+		$field = null;
+		foreach ( $this->section->fields() as $candidate ) {
+			if ( ( $candidate['id'] ?? '' ) === Settings::OPTION . '[refuse_name_mismatch]' ) {
+				$field = $candidate;
+			}
+		}
+
+		$this->assertNotNull( $field );
+		$this->assertSame( 'checkbox', $field['type'] );
+		$this->assertSame( 'Refuse the order when the company name doesn\'t match the registry', $field['desc'] );
+		$this->assertStringContainsString( 'registered', $field['desc_tip'] );
+	}
+
 	public function test_numbers_are_clamped(): void {
 		$this->save(
 			array(
@@ -376,5 +399,35 @@ class SettingsSectionTest extends IntegrationTestCase {
 			$this->assertSame( '', get_user_meta( get_current_user_id(), SettingsSection::DISMISSED_META, true ) );
 			unset( $_POST['issue'], $_REQUEST['_wpnonce'] );
 		}
+	}
+
+	public function test_the_uk_store_number_is_saved_canonical_and_clears(): void {
+		$this->save( array( 'store_vat_number_gb' => ' gb 980 7806 84 ' ) );
+		$this->assertSame( 'GB980780684', Settings::get()->store_vat_number_gb() );
+
+		$this->save( array( 'store_vat_number_gb' => '' ) );
+		$this->assertSame( '', Settings::get()->store_vat_number_gb() );
+	}
+
+	public function test_a_uk_number_that_is_not_a_gb_number_keeps_the_previous_one(): void {
+		$this->save( array( 'store_vat_number_gb' => 'GB980780684' ) );
+
+		foreach ( array( 'DE114103379', 'GB123', 'nonsense' ) as $bad ) {
+			$this->save( array( 'store_vat_number_gb' => $bad ) );
+			$this->assertSame( 'GB980780684', Settings::get()->store_vat_number_gb(), $bad );
+		}
+		$this->assertStringContainsString( 'UK store VAT number', $this->notices() );
+	}
+
+	public function test_the_uk_store_number_field_explains_itself_beside_the_eu_one(): void {
+		$ids = array_column( $this->section->fields(), 'id' );
+		$eu  = array_search( Settings::OPTION . '[store_vat_number]', $ids, true );
+		$gb  = array_search( Settings::OPTION . '[store_vat_number_gb]', $ids, true );
+
+		$this->assertNotFalse( $gb );
+		$this->assertSame( $eu + 1, $gb );
+		$field = $this->section->fields()[ $gb ];
+		$this->assertSame( 'UK store VAT number', $field['title'] );
+		$this->assertStringContainsString( 'HMRC', $field['desc_tip'] );
 	}
 }

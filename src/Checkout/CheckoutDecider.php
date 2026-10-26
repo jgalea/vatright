@@ -68,6 +68,7 @@ class CheckoutDecider {
 	private static function error_code( ?Decision $decision ): ?string {
 		$blocking = null === $decision ? null : $decision->blocking_error();
 		return $blocking
+			?? ( NameMismatch::refuses( $decision ) ? NameMismatch::CODE : null )
 			?? B2bOnly::error( $decision, B2bOnly::billing_country() )
 			?? ( self::requires_confirmation( $decision ) ? 'self_certification_required' : null );
 	}
@@ -84,6 +85,11 @@ class CheckoutDecider {
 				return __( 'This VAT number is not valid. Correct it, or leave the field empty to pay with VAT.', 'vatright' );
 			case 'registry_unavailable':
 				return __( 'We could not check your VAT number with the tax authority just now. Try again in a few minutes, or leave the field empty to pay with VAT.', 'vatright' );
+			case NameMismatch::CODE:
+				if ( B2bOnly::applies( $country ) ) {
+					return __( 'The company name does not match the name registered for this VAT number. Enter the company name exactly as it is registered for that number.', 'vatright' );
+				}
+				return __( 'The company name does not match the name registered for this VAT number. Enter the company name exactly as it is registered for that number, or leave the VAT number empty to pay with VAT.', 'vatright' );
 			case 'self_certification_required':
 				return __( 'Your billing country and your location do not match. Confirm the country you are located in to continue.', 'vatright' );
 			default:

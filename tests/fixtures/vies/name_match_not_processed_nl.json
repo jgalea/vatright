@@ -1,0 +1,13 @@
+{
+  "_recorded_at": "2026-10-26T18:22:17+00:00",
+  "request": {
+    "method": "POST",
+    "url": "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
+    "body_contains": "\"vatNumber\":\"820646660B01\",\"traderName\":\"Totally Different Bakery\""
+  },
+  "response": {
+    "status": 200,
+    "body": "{\n  \"countryCode\" : \"NL\",\n  \"vatNumber\" : \"820646660B01\",\n  \"requestDate\" : \"2026-10-26T18:22:17.741Z\",\n  \"valid\" : true,\n  \"requestIdentifier\" : \"\",\n  \"name\" : \"ABN AMRO BANK N.V.\",\n  \"address\" : \"\\nGUSTAV MAHLERLAAN 00010\\n1082PP AMSTERDAM\\n\",\n  \"traderName\" : \"---\",\n  \"traderStreet\" : \"---\",\n  \"traderPostalCode\" : \"---\",\n  \"traderCity\" : \"---\",\n  \"traderCompanyType\" : \"---\",\n  \"traderNameMatch\" : \"NOT_PROCESSED\",\n  \"traderStreetMatch\" : \"NOT_PROCESSED\",\n  \"traderPostalCodeMatch\" : \"NOT_PROCESSED\",\n  \"traderCityMatch\" : \"NOT_PROCESSED\",\n  \"traderCompanyTypeMatch\" : \"NOT_PROCESSED\"\n}",
+    "error": ""
+  }
+}

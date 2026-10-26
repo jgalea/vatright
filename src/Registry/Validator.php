@@ -28,8 +28,11 @@ class Validator {
 		$this->throttle = $throttle ?? new LookupThrottle();
 	}
 
-	public function validate( VatNumber $n, bool $allow_network, bool $fresh = false ): ValidationResult {
-		return $this->lookup( $n, $allow_network, $fresh, null );
+	/**
+	 * @param string $trader_name A company name to compare with the registry's, sent only to a registry that compares names.
+	 */
+	public function validate( VatNumber $n, bool $allow_network, bool $fresh = false, string $trader_name = '' ): ValidationResult {
+		return $this->lookup( $n, $allow_network, $fresh, null, $trader_name );
 	}
 
 	/**
@@ -41,11 +44,18 @@ class Validator {
 	 *
 	 * @param string $bucket 'update' or 'checkout', each with its own per-client allowance.
 	 */
-	public function validate_for_visitor( VatNumber $n, string $bucket ): ValidationResult {
-		return $this->lookup( $n, true, false, $bucket );
+	public function validate_for_visitor( VatNumber $n, string $bucket, string $trader_name = '' ): ValidationResult {
+		return $this->lookup( $n, true, false, $bucket, $trader_name );
 	}
 
-	private function lookup( VatNumber $n, bool $allow_network, bool $fresh, ?string $bucket ): ValidationResult {
+	/**
+	 * A name that can't be compared (no company, or a registry that doesn't
+	 * compare names) is a plain lookup. A cached VALID answer is reused as it
+	 * is; only a missing verdict for this name sends the registry a new
+	 * request, and a lookup that can't make one returns the cached answer
+	 * without a mismatch.
+	 */
+	private function lookup( VatNumber $n, bool $allow_network, bool $fresh, ?string $bucket, string $trader_name ): ValidationResult {
 		if ( ! FormatCheck::is_plausible( $n ) ) {
 			return new ValidationResult( ValidationResult::FORMAT_INVALID, 'format', gmdate( 'Y-m-d\TH:i:s\Z' ) );
 		}
@@ -56,38 +66,76 @@ class Validator {
 		}
 
 		$requester = $this->requester_for( $registry );
+		$named     = '' !== $trader_name && $registry instanceof NameMatching;
 		$cached    = $fresh ? null : $this->cache->get( $n, $requester );
 		if ( null !== $cached ) {
-			return $cached;
+			if ( ! $named || ValidationResult::VALID !== $cached->status() ) {
+				return $cached;
+			}
+			$verdict = $this->cache->get_name_verdict( $n, $requester, $trader_name );
+			if ( null !== $verdict ) {
+				if ( ValidationCache::NAME_OK === $verdict ) {
+					return $cached;
+				}
+				return $this->with_detail( $cached, ValidationCache::NAME_MISMATCH === $verdict ? NameMatching::MISMATCH : NameMatching::MISMATCH_LOCAL );
+			}
 		}
 		if ( ! $allow_network ) {
-			return new ValidationResult( ValidationResult::UNCHECKED, $registry->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, 'cache_miss' );
+			return $cached ?? new ValidationResult( ValidationResult::UNCHECKED, $registry->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, 'cache_miss' );
 		}
 		if ( null !== $bucket && ! $this->throttle->allow( $bucket ) ) {
-			return new ValidationResult( ValidationResult::UNCHECKED, $registry->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, 'throttled' );
+			return $cached ?? new ValidationResult( ValidationResult::UNCHECKED, $registry->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, 'throttled' );
 		}
 
-		$result = $registry->check( $n, $requester );
+		$result = $this->ask( $registry, $n, $requester, $named ? $trader_name : '' );
 		if ( null !== $requester && ValidationResult::UNAVAILABLE === $result->status() && 'INVALID_REQUESTER_INFO' === $result->detail() ) {
-			$result = $this->with_detail( $registry->check( $n, null ), 'requester_rejected' );
+			$result = $this->with_detail( $this->ask( $registry, $n, null, $named ? $trader_name : '' ), 'requester_rejected' );
 		}
 
-		$this->cache->put( $n, $requester, $result );
+		$mismatch = in_array( $result->detail(), array( NameMatching::MISMATCH, NameMatching::MISMATCH_LOCAL ), true );
+		$this->cache->put( $n, $requester, $mismatch ? $this->replace_detail( $result, '' ) : $result );
+		if ( $named && ValidationResult::VALID === $result->status() ) {
+			$this->cache->put_name_verdict( $n, $requester, $trader_name, $this->name_verdict( $result ) );
+		}
 		return $result;
 	}
 
-	private function requester_for( Registry $registry ): ?VatNumber {
-		$store = VatNumber::parse( $this->settings->store_vat_number(), '' );
-		if ( null === $store || ! $registry->supports( $store ) ) {
-			return null;
+	private function name_verdict( ValidationResult $result ): string {
+		switch ( $result->detail() ) {
+			case NameMatching::MISMATCH:
+				return ValidationCache::NAME_MISMATCH;
+			case NameMatching::MISMATCH_LOCAL:
+				return ValidationCache::NAME_MISMATCH_LOCAL;
+			default:
+				return ValidationCache::NAME_OK;
 		}
-		return $store;
+	}
+
+	private function ask( Registry $registry, VatNumber $n, ?VatNumber $requester, string $trader_name ): ValidationResult {
+		if ( '' !== $trader_name && $registry instanceof NameMatching ) {
+			return $registry->check_named( $n, $requester, $trader_name );
+		}
+		return $registry->check( $n, $requester );
+	}
+
+	/**
+	 * The first store number the registry accepts as a requester: the EU
+	 * number for VIES, the GB number for HMRC.
+	 */
+	private function requester_for( Registry $registry ): ?VatNumber {
+		foreach ( $this->settings->store_requesters() as $store ) {
+			if ( $registry->supports( $store ) ) {
+				return $store;
+			}
+		}
+		return null;
 	}
 
 	private function with_detail( ValidationResult $result, string $detail ): ValidationResult {
-		if ( '' !== $result->detail() ) {
-			return $result;
-		}
+		return '' !== $result->detail() ? $result : $this->replace_detail( $result, $detail );
+	}
+
+	private function replace_detail( ValidationResult $result, string $detail ): ValidationResult {
 		return new ValidationResult(
 			$result->status(),
 			$result->registry(),

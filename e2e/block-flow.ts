@@ -22,6 +22,9 @@ export async function fillCustomer( page: Page, customer: Customer ) {
 	await page.locator( `#${ form }-last_name` ).fill( TEST_CUSTOMER.last );
 	await page.locator( `#${ form }-address_1` ).fill( TEST_CUSTOMER.address );
 	await page.locator( `#${ form }-city` ).fill( TEST_CUSTOMER.city );
+	if ( customer.state ) {
+		await page.locator( `#${ form }-state` ).selectOption( customer.state );
+	}
 	await page.locator( `#${ form }-postcode` ).fill( customer.postcode );
 	await page.locator( `#${ form }-phone` ).fill( TEST_CUSTOMER.phone );
 	await settle( page );

@@ -2,6 +2,8 @@
 
 namespace Vatright\Reports;
 
+use DateTimeImmutable;
+
 class ReportsScreen {
 
 	const SLUG       = 'vatright-reports';
@@ -42,41 +44,34 @@ class ReportsScreen {
 	}
 
 	public function render(): void {
-		list( $year, $quarter ) = $this->selection( $_GET ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$missing                = array();
-		$oss                    = $this->oss->build( $year, $quarter );
-		$esl                    = $this->esl_or_null( $year, $quarter, $missing );
-		$month                  = $this->month( $_GET ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$intrastat_orders       = array();
-		$intrastat              = $this->intrastat_or_null( $year, $month, $intrastat_orders );
-		$this_year              = (int) wp_date( 'Y' );
+		$period               = $this->selection( $_GET ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		list( $year, $month ) = $this->intrastat_month( $_GET, $period ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$missing              = array();
+		$oss                  = $this->oss->build_for( $period );
+		$esl                  = $this->esl_or_null( $period, $missing );
+		$intrastat_orders     = array();
+		$intrastat            = $this->intrastat_or_null( $year, $month, $intrastat_orders );
 		?>
 		<div class="wrap woocommerce">
 			<h1><?php esc_html_e( 'EU VAT reports', 'vatright' ); ?></h1>
-			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
-				<input type="hidden" name="page" value="<?php echo esc_attr( self::SLUG ); ?>" />
-				<select name="year">
-					<?php for ( $y = $this_year; $y >= $this_year - 5; $y-- ) : ?>
-						<option value="<?php echo esc_attr( (string) $y ); ?>" <?php selected( $y, $year ); ?>><?php echo esc_html( (string) $y ); ?></option>
-					<?php endfor; ?>
-				</select>
-				<select name="quarter">
-					<?php for ( $q = 1; $q <= 4; $q++ ) : ?>
-						<option value="<?php echo esc_attr( (string) $q ); ?>" <?php selected( $q, $quarter ); ?>><?php echo esc_html( 'Q' . $q ); ?></option>
-					<?php endfor; ?>
-				</select>
-				<select name="month" aria-label="<?php esc_attr_e( 'Month for INTRASTAT', 'vatright' ); ?>">
-					<?php for ( $m = 1; $m <= 12; $m++ ) : ?>
-						<option value="<?php echo esc_attr( (string) $m ); ?>" <?php selected( $m, $month ); ?>><?php echo esc_html( (string) wp_date( 'F', (int) gmmktime( 0, 0, 0, $m, 1, 2000 ) ) ); ?></option>
-					<?php endfor; ?>
-				</select>
-				<button type="submit" class="button"><?php esc_html_e( 'Show', 'vatright' ); ?></button>
-			</form>
+			<?php $this->period_form( $period, $month ); ?>
+			<p class="description">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: 1: first day, 2: last day, both as Y-m-d. */
+						__( 'Sales made from %1$s to %2$s.', 'vatright' ),
+						$period->start(),
+						$period->end()
+					)
+				);
+				?>
+			</p>
 
 			<h2><?php esc_html_e( 'OSS return', 'vatright' ); ?></h2>
 			<p><?php echo esc_html( sprintf( /* translators: %s: conversion rule. */ __( 'Non-euro orders are converted at the %s.', 'vatright' ), $oss['rate_rule'] ) ); ?></p>
 			<?php $this->oss_table( $oss ); ?>
-			<?php $this->export_form( 'vatright_export_oss', $year, $quarter, __( 'Download OSS CSV', 'vatright' ) ); ?>
+			<?php $this->export_form( 'vatright_export_oss', $period, __( 'Download OSS CSV', 'vatright' ) ); ?>
 
 			<h2><?php esc_html_e( 'EC Sales List', 'vatright' ); ?></h2>
 			<?php if ( null === $esl ) : ?>
@@ -115,7 +110,7 @@ class ReportsScreen {
 						<?php endif; ?>
 					</tbody>
 				</table>
-				<?php $this->export_form( 'vatright_export_esl', $year, $quarter, __( 'Download EC Sales List CSV', 'vatright' ) ); ?>
+				<?php $this->export_form( 'vatright_export_esl', $period, __( 'Download EC Sales List CSV', 'vatright' ) ); ?>
 			<?php endif; ?>
 
 			<h2><?php esc_html_e( 'INTRASTAT dispatches', 'vatright' ); ?></h2>
@@ -135,22 +130,22 @@ class ReportsScreen {
 				</p></div>
 			<?php else : ?>
 				<?php $this->intrastat_table( $intrastat ); ?>
-				<?php $this->export_form( 'vatright_export_intrastat', $year, $quarter, __( 'Download INTRASTAT CSV', 'vatright' ), $month ); ?>
+				<?php $this->export_form( 'vatright_export_intrastat', $period, __( 'Download INTRASTAT CSV', 'vatright' ), $year, $month ); ?>
 			<?php endif; ?>
 		</div>
 		<?php
 	}
 
 	public function export_oss(): void {
-		list( $year, $quarter ) = $this->authorised_selection();
-		$csv                    = OssReport::csv( $this->oss->build( $year, $quarter ) );
-		Csv::send( sprintf( 'oss-%d-q%d.csv', $year, $quarter ), $csv[0], $csv[1] );
+		$period = $this->authorised_selection();
+		$csv    = OssReport::csv( $this->oss->build_for( $period ) );
+		Csv::send( sprintf( 'oss-%s.csv', $period->slug() ), $csv[0], $csv[1] );
 	}
 
 	public function export_esl(): void {
-		list( $year, $quarter ) = $this->authorised_selection();
+		$period = $this->authorised_selection();
 		try {
-			$rows = $this->esl->build( $year, $quarter );
+			$rows = $this->esl->build_for( $period );
 		} catch ( IncompleteReport $e ) {
 			wp_die(
 				esc_html(
@@ -163,12 +158,12 @@ class ReportsScreen {
 			);
 		}
 		$csv = EcSalesList::csv( $rows );
-		Csv::send( sprintf( 'ec-sales-list-%d-q%d.csv', $year, $quarter ), $csv[0], $csv[1] );
+		Csv::send( sprintf( 'ec-sales-list-%s.csv', $period->slug() ), $csv[0], $csv[1] );
 	}
 
 	public function export_intrastat(): void {
-		list( $year ) = $this->authorised_selection();
-		$month        = $this->month( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- authorised_selection() checked the nonce.
+		$period               = $this->authorised_selection();
+		list( $year, $month ) = $this->intrastat_month( $_POST, $period ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- authorised_selection() checked the nonce.
 		try {
 			$report = $this->intrastat->build( $year, $month );
 		} catch ( IncompleteReport $e ) {
@@ -194,9 +189,9 @@ class ReportsScreen {
 	 * @param int[] $missing
 	 * @return array<int,array{customer_vat:string,country:string,type:string,net_eur:float}>|null
 	 */
-	private function esl_or_null( int $year, int $quarter, array &$missing ): ?array {
+	private function esl_or_null( ReportPeriod $period, array &$missing ): ?array {
 		try {
-			return $this->esl->build( $year, $quarter );
+			return $this->esl->build_for( $period );
 		} catch ( IncompleteReport $e ) {
 			$missing = $e->order_ids();
 			return null;
@@ -217,21 +212,28 @@ class ReportsScreen {
 	}
 
 	/**
-	 * The quarter chosen without a month shows the last month of that quarter.
+	 * The INTRASTAT year and month. A month period uses its own; a custom range
+	 * uses the month it starts in; a quarter keeps the month chosen beside it,
+	 * or its last month when none was, or the current month when no quarter was
+	 * chosen either.
 	 *
 	 * @param array<string,mixed> $source
-	 */
-	private function month( array $source ): int {
-		if ( isset( $source['month'] ) ) {
-			return max( 1, min( 12, absint( $source['month'] ) ) );
-		}
-		return isset( $source['quarter'] ) ? max( 1, min( 4, absint( $source['quarter'] ) ) ) * 3 : (int) wp_date( 'n' );
-	}
-
-	/**
 	 * @return array{0:int,1:int}
 	 */
-	private function authorised_selection(): array {
+	private function intrastat_month( array $source, ReportPeriod $period ): array {
+		if ( ReportPeriod::RANGE === $period->kind() ) {
+			return array( $period->year(), (int) substr( $period->start(), 5, 2 ) );
+		}
+		if ( ReportPeriod::MONTH === $period->kind() ) {
+			return array( $period->year(), (int) substr( $period->start(), 5, 2 ) );
+		}
+		if ( isset( $source['month'] ) ) {
+			return array( $period->year(), max( 1, min( 12, absint( $source['month'] ) ) ) );
+		}
+		return array( $period->year(), isset( $source['quarter'] ) ? (int) $period->quarter_number() * 3 : (int) wp_date( 'n' ) );
+	}
+
+	private function authorised_selection(): ReportPeriod {
 		if ( ! current_user_can( self::CAPABILITY ) ) {
 			wp_die( esc_html__( 'You do not have permission to export these reports.', 'vatright' ), '', array( 'response' => 403 ) );
 		}
@@ -240,13 +242,106 @@ class ReportsScreen {
 	}
 
 	/**
+	 * What the form chose, with anything missing or out of range replaced by
+	 * the current quarter or month.
+	 *
 	 * @param array<string,mixed> $source
-	 * @return array{0:int,1:int}
 	 */
-	private function selection( array $source ): array {
-		$year    = isset( $source['year'] ) ? absint( $source['year'] ) : (int) wp_date( 'Y' );
-		$quarter = isset( $source['quarter'] ) ? absint( $source['quarter'] ) : (int) ceil( (int) wp_date( 'n' ) / 3 );
-		return array( max( 2000, min( 2100, $year ) ), max( 1, min( 4, $quarter ) ) );
+	private function selection( array $source ): ReportPeriod {
+		$text   = static function ( string $key ) use ( $source ): string {
+			return isset( $source[ $key ] ) && is_scalar( $source[ $key ] ) ? trim( wp_unslash( (string) $source[ $key ] ) ) : '';
+		};
+		$today  = new DateTimeImmutable( 'now', wp_timezone() );
+		$number = static function ( string $key, int $fallback, int $min, int $max ) use ( $text ): int {
+			$value = absint( $text( $key ) );
+			return 0 === $value ? $fallback : max( $min, min( $max, $value ) );
+		};
+		$year   = $number( 'year', (int) $today->format( 'Y' ), 2000, 2100 );
+
+		switch ( $text( 'period' ) ) {
+			case ReportPeriod::MONTH:
+				return ReportPeriod::month( $year, $number( 'month', (int) $today->format( 'n' ), 1, 12 ) );
+			case ReportPeriod::RANGE:
+				$range = ReportPeriod::range( $text( 'from' ), $text( 'to' ) );
+				if ( null !== $range ) {
+					return $range;
+				}
+				break;
+		}
+
+		return ReportPeriod::quarter( $year, $number( 'quarter', (int) ceil( (int) $today->format( 'n' ) / 3 ), 1, 4 ) );
+	}
+
+	private function period_form( ReportPeriod $period, int $intrastat_month ): void {
+		global $wp_locale;
+
+		$today     = new DateTimeImmutable( 'now', wp_timezone() );
+		$this_year = (int) $today->format( 'Y' );
+		$quarter   = $period->quarter_number() ?? (int) ceil( $intrastat_month / 3 );
+		$month     = ReportPeriod::MONTH === $period->kind() ? (int) substr( $period->start(), 5, 2 ) : $intrastat_month;
+		$from      = ReportPeriod::RANGE === $period->kind() ? $period->start() : $today->format( 'Y-m-01' );
+		$to        = ReportPeriod::RANGE === $period->kind() ? $period->end() : $today->format( 'Y-m-d' );
+		$kinds     = array(
+			ReportPeriod::QUARTER => __( 'Quarter', 'vatright' ),
+			ReportPeriod::MONTH   => __( 'Month', 'vatright' ),
+			ReportPeriod::RANGE   => __( 'Custom range', 'vatright' ),
+		);
+		?>
+		<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" class="vatright-period">
+			<input type="hidden" name="page" value="<?php echo esc_attr( self::SLUG ); ?>" />
+			<label for="vatright-period"><?php esc_html_e( 'Period', 'vatright' ); ?></label>
+			<select name="period" id="vatright-period">
+				<?php foreach ( $kinds as $value => $label ) : ?>
+					<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $value, $period->kind() ); ?>><?php echo esc_html( $label ); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<span data-period-kinds="quarter month">
+				<label class="screen-reader-text" for="vatright-year"><?php esc_html_e( 'Year', 'vatright' ); ?></label>
+				<select name="year" id="vatright-year">
+					<?php for ( $y = $this_year; $y >= $this_year - 5; $y-- ) : ?>
+						<option value="<?php echo esc_attr( (string) $y ); ?>" <?php selected( $y, $period->year() ); ?>><?php echo esc_html( (string) $y ); ?></option>
+					<?php endfor; ?>
+				</select>
+			</span>
+			<span data-period-kinds="quarter">
+				<label class="screen-reader-text" for="vatright-quarter"><?php esc_html_e( 'Quarter', 'vatright' ); ?></label>
+				<select name="quarter" id="vatright-quarter">
+					<?php for ( $q = 1; $q <= 4; $q++ ) : ?>
+						<option value="<?php echo esc_attr( (string) $q ); ?>" <?php selected( $q, $quarter ); ?>><?php echo esc_html( 'Q' . $q ); ?></option>
+					<?php endfor; ?>
+				</select>
+			</span>
+			<span data-period-kinds="quarter month">
+				<label class="screen-reader-text" for="vatright-month"><?php esc_html_e( 'Month, also the month of the INTRASTAT report', 'vatright' ); ?></label>
+				<select name="month" id="vatright-month">
+					<?php for ( $m = 1; $m <= 12; $m++ ) : ?>
+						<option value="<?php echo esc_attr( (string) $m ); ?>" <?php selected( $m, $month ); ?>><?php echo esc_html( $wp_locale->get_month( $m ) ); ?></option>
+					<?php endfor; ?>
+				</select>
+			</span>
+			<span data-period-kinds="range">
+				<label for="vatright-from"><?php esc_html_e( 'From', 'vatright' ); ?></label>
+				<input type="date" name="from" id="vatright-from" value="<?php echo esc_attr( $from ); ?>" />
+				<label for="vatright-to"><?php esc_html_e( 'To', 'vatright' ); ?></label>
+				<input type="date" name="to" id="vatright-to" value="<?php echo esc_attr( $to ); ?>" />
+			</span>
+			<button type="submit" class="button"><?php esc_html_e( 'Show', 'vatright' ); ?></button>
+		</form>
+		<?php
+		wp_print_inline_script_tag(
+			"( function () {
+	var form = document.querySelector( '.vatright-period' );
+	if ( ! form ) { return; }
+	var kind = form.querySelector( '[name=period]' );
+	function sync() {
+		form.querySelectorAll( '[data-period-kinds]' ).forEach( function ( el ) {
+			el.hidden = el.getAttribute( 'data-period-kinds' ).split( ' ' ).indexOf( kind.value ) === -1;
+		} );
+	}
+	kind.addEventListener( 'change', sync );
+	sync();
+} )();"
+		);
 	}
 
 	/**
@@ -396,16 +491,32 @@ class ReportsScreen {
 		return $labels[ $field ] ?? $field;
 	}
 
-	private function export_form( string $action, int $year, int $quarter, string $label, ?int $month = null ): void {
+	private function export_form( string $action, ReportPeriod $period, string $label, ?int $year = null, ?int $month = null ): void {
+		$fields = array( 'period' => $period->kind() );
+		if ( ReportPeriod::RANGE === $period->kind() ) {
+			$fields['from'] = $period->start();
+			$fields['to']   = $period->end();
+		} else {
+			$fields['year'] = (string) $period->year();
+			if ( ReportPeriod::QUARTER === $period->kind() ) {
+				$fields['quarter'] = (string) $period->quarter_number();
+			} else {
+				$fields['month'] = (string) (int) substr( $period->start(), 5, 2 );
+			}
+		}
+		if ( null !== $month ) {
+			$fields['month'] = (string) $month;
+		}
+		if ( null !== $year ) {
+			$fields['year'] = (string) $year;
+		}
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( self::NONCE ); ?>
 			<input type="hidden" name="action" value="<?php echo esc_attr( $action ); ?>" />
-			<input type="hidden" name="year" value="<?php echo esc_attr( (string) $year ); ?>" />
-			<input type="hidden" name="quarter" value="<?php echo esc_attr( (string) $quarter ); ?>" />
-			<?php if ( null !== $month ) : ?>
-				<input type="hidden" name="month" value="<?php echo esc_attr( (string) $month ); ?>" />
-			<?php endif; ?>
+			<?php foreach ( $fields as $name => $value ) : ?>
+				<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
+			<?php endforeach; ?>
 			<p><button type="submit" class="button"><?php echo esc_html( $label ); ?></button></p>
 		</form>
 		<?php

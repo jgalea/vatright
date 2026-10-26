@@ -1,0 +1,13 @@
+{
+  "_recorded_at": "2026-10-26T18:22:15+00:00",
+  "request": {
+    "method": "POST",
+    "url": "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
+    "body_contains": "\"vatNumber\":\"A15075062\",\"traderName\":\"Industria de Diseno Textil SA\""
+  },
+  "response": {
+    "status": 200,
+    "body": "{\n  \"countryCode\" : \"ES\",\n  \"vatNumber\" : \"A15075062\",\n  \"requestDate\" : \"2026-10-26T18:22:15.080Z\",\n  \"valid\" : true,\n  \"requestIdentifier\" : \"\",\n  \"name\" : \"---\",\n  \"address\" : \"---\",\n  \"traderName\" : \"Industria de Diseno Textil SA\",\n  \"traderNameMatch\" : \"VALID\",\n  \"traderStreetMatch\" : \"NOT_PROCESSED\",\n  \"traderPostalCodeMatch\" : \"NOT_PROCESSED\",\n  \"traderCityMatch\" : \"NOT_PROCESSED\",\n  \"traderCompanyTypeMatch\" : \"NOT_PROCESSED\"\n}",
+    "error": ""
+  }
+}
