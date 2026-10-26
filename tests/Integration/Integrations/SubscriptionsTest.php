@@ -291,6 +291,8 @@ class SubscriptionsTest extends CheckoutTestCase {
 		$sub = $this->order( WC_Subscription::class );
 		if ( $decided ) {
 			$this->decide_and_store( $sub );
+			// The VIES fixtures carry a fixed requestDate, which would age out of the reuse window.
+			$this->age_validation( $sub, 0 );
 		}
 		$this->vies_calls = 0;
 		return $sub;

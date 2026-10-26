@@ -101,6 +101,47 @@ class ViesTest extends TestCase {
 		$this->assertSame( 'MS_UNAVAILABLE', $result->detail() );
 	}
 
+	/**
+	 * @dataProvider provide_rejections
+	 */
+	public function test_a_number_vies_rejects_is_invalid_not_unavailable( string $code ): void {
+		$result = $this->replying( 200, '{"actionSucceed":false,"errorWrappers":[{"error":"' . $code . '"}]}' )->check( $this->number( 'MT12345678' ), null );
+
+		$this->assertSame( ValidationResult::INVALID, $result->status() );
+		$this->assertSame( $code, $result->detail() );
+	}
+
+	/**
+	 * @return array<string,array{string}>
+	 */
+	public function provide_rejections(): array {
+		return array(
+			'format rejected' => array( 'INVALID_INPUT' ),
+			'number blocked'  => array( 'VAT_BLOCKED' ),
+		);
+	}
+
+	/**
+	 * @dataProvider provide_load_refusals
+	 */
+	public function test_vies_turning_the_store_away_counts_as_throttled( string $code ): void {
+		$result = $this->replying( 200, '{"actionSucceed":false,"errorWrappers":[{"error":"' . $code . '"}]}' )->check( $this->number( 'MT12345678' ), null );
+
+		$this->assertSame( ValidationResult::UNCHECKED, $result->status() );
+		$this->assertSame( 'throttled', $result->detail() );
+	}
+
+	/**
+	 * @return array<string,array{string}>
+	 */
+	public function provide_load_refusals(): array {
+		return array(
+			'store IP blocked'    => array( 'IP_BLOCKED' ),
+			'too many, overall'   => array( 'GLOBAL_MAX_CONCURRENT_REQ' ),
+			'too many, one state' => array( 'MS_MAX_CONCURRENT_REQ' ),
+		);
+	}
+
 	public function test_timeout_maps_to_unavailable(): void {
 		$result = $this->vies()->check( $this->number( 'MT90000002' ), null );
 

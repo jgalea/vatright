@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/LICENSE-GPL-5C9E31?style=for-the-badge"></a>
-  <a href="https://jeangalea.com"><img alt="Built by" src="https://img.shields.io/badge/BUILT%20BY-JEAN%20GALEA-8A2BE2?style=for-the-badge"></a>
+  <a href="https://github.com/jgalea"><img alt="Built by" src="https://img.shields.io/badge/BUILT%20BY-JEAN%20GALEA-8A2BE2?style=for-the-badge"></a>
 </p>
 
 <p align="center"><b>VAT Right is free EU VAT handling for WooCommerce: number validation, reverse charge, the OSS threshold and a decision record on every order.</b></p>

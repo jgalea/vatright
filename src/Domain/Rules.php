@@ -254,7 +254,8 @@ final class Rules {
 			return $result;
 		}
 
-		if ( 'exempt_pending' === $in->outage_policy() ) {
+		// The outage policy only covers a registry that was tried and failed; a number never checked is charged.
+		if ( 'exempt_pending' === $in->outage_policy() && ValidationResult::UNAVAILABLE === $status ) {
 			$result = $this->exempt_line( $line, Rule::PENDING_EXEMPT, $domestic ? $store : $place );
 			if ( $domestic ) {
 				$result['scheme'] = Scheme::DOMESTIC;

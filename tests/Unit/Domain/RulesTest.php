@@ -633,6 +633,32 @@ class RulesTest extends TestCase {
 		);
 	}
 
+	/**
+	 * @dataProvider provide_never_checked
+	 */
+	public function test_exempt_pending_charges_a_number_that_was_never_checked( ?string $status ): void {
+		$d = $this->decide(
+			array(
+				'vat'    => 'DE123456789',
+				'status' => $status,
+				'policy' => 'exempt_pending',
+			)
+		);
+		$this->assertCharged( $d );
+		$this->assertSame( Rule::PENDING_CHARGED, $d->rule() );
+		$this->assertSame( array( 'validation_pending' ), $d->flags() );
+	}
+
+	/**
+	 * @return array<string,array{?string}>
+	 */
+	public function provide_never_checked(): array {
+		return array(
+			'unchecked'        => array( ValidationResult::UNCHECKED ),
+			'no result at all' => array( null ),
+		);
+	}
+
 	public function test_exempt_pending_never_exempts_a_domestic_number(): void {
 		$d = $this->decide(
 			array(

@@ -15,14 +15,18 @@ global $wpdb;
 
 \Vatright\Ledger\Schema::drop();
 
-$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+// delete_option() keeps the object cache in step, so no site-wide cache flush is needed.
+$vatright_options = $wpdb->get_col( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 	$wpdb->prepare(
-		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s",
+		"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s",
 		$wpdb->esc_like( 'vatright_' ) . '%',
 		$wpdb->esc_like( '_transient_vatright_' ) . '%',
 		$wpdb->esc_like( '_transient_timeout_vatright_' ) . '%'
 	)
 );
+foreach ( $vatright_options as $vatright_option ) {
+	delete_option( $vatright_option );
+}
 
 delete_metadata( 'user', 0, '_vatright_number', '', true );
 delete_metadata( 'user', 0, '_wc_other/vatright/vat-number', '', true );
@@ -30,5 +34,3 @@ delete_metadata( 'user', 0, '_wc_other/vatright/vat-number', '', true );
 if ( function_exists( 'as_unschedule_all_actions' ) ) {
 	as_unschedule_all_actions( '', array(), 'vatright' );
 }
-
-wp_cache_flush();

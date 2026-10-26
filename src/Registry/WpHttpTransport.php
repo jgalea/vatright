@@ -7,9 +7,10 @@ class WpHttpTransport implements HttpTransport {
 	public function request( string $method, string $url, string $body = '', array $headers = array(), int $timeout = 5 ): array {
 		$timeout = (int) ceil( min( 5.0, max( 1.0, (float) apply_filters( 'vatright_registry_timeout', (float) $timeout ) ) ) );
 
+		// ec.europa.eu cuts compressed answers short through the WordPress HTTP API (cURL error 56).
 		$args = array(
 			'method'  => $method,
-			'headers' => $headers,
+			'headers' => $headers + array( 'Accept-Encoding' => 'identity' ),
 			'timeout' => $timeout,
 		);
 

@@ -107,7 +107,16 @@ class Vies implements Registry {
 		}
 
 		if ( false === ( $data['actionSucceed'] ?? null ) || isset( $data['errorWrappers'] ) ) {
-			return $this->unavailable( $this->error_code( $data ) );
+			$code = $this->error_code( $data );
+			// VIES answered and refused the number: that's a verdict, not an outage.
+			if ( in_array( $code, array( 'INVALID_INPUT', 'VAT_BLOCKED' ), true ) ) {
+				return new ValidationResult( ValidationResult::INVALID, $this->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, $code );
+			}
+			// VIES turning the store away for load can be caused by visitors, so it charges VAT like our own throttle.
+			if ( in_array( $code, array( 'IP_BLOCKED', 'GLOBAL_MAX_CONCURRENT_REQ', 'MS_MAX_CONCURRENT_REQ' ), true ) ) {
+				return new ValidationResult( ValidationResult::UNCHECKED, $this->id(), gmdate( 'Y-m-d\TH:i:s\Z' ), null, null, null, false, 'throttled' );
+			}
+			return $this->unavailable( $code );
 		}
 		if ( 200 !== $response['status'] ) {
 			return $this->unavailable( 'http_' . $response['status'] );

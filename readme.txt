@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.1
+Stable tag: 0.1.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -46,7 +46,7 @@ Settings live under WooCommerce > Settings > Tax > VAT Right.
 
 = What happens when VIES is down? =
 
-Checkout still works. By default the order is accepted, VAT is charged and the order is flagged as pending validation. The plugin checks the number again later and, if it validates, marks the order and can email you so you can refund the VAT. The setting "When a registry is unavailable" offers two alternatives: accept the order, exempt the VAT and re-check later, or don't accept the order. Registry requests time out after a few seconds.
+Checkout still works. By default the order is accepted, VAT is charged and the order is flagged as pending validation. The plugin checks the number again later and, if it validates, marks the order and can email you so you can refund the VAT. The setting "When a registry is unavailable" offers two alternatives: accept the order, exempt the VAT and re-check later, or don't accept the order. Registry requests time out after a few seconds. Exempting while a registry is down lets anyone enter a made-up number for that country, so the VAT is yours to recover if the re-check fails.
 
 = How do I validate UK VAT numbers? =
 
@@ -79,6 +79,7 @@ Each of these errs on the side of charging VAT.
 * Business customers in the UK are treated as consumers unless you add your own HMRC API credentials. Swiss and Norwegian numbers that can't be checked at checkout are charged VAT until they're re-checked.
 * In a cart that's partly exempt because of a domestic exemption, the exempt line is charged VAT.
 * On carts in a currency other than EUR, the threshold display updates at checkout, not on every cart recalculation.
+* A valid VAT number removes VAT without checking that the buyer is that company, so a published number belonging to someone else would pass.
 
 == External services ==
 
@@ -109,6 +110,17 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 5. The EU VAT reports: OSS return and EC Sales List.
 
 == Changelog ==
+
+= 0.1.4 =
+* Fix: on hosts where WordPress fetches over cURL with OpenSSL 3, VIES checks failed and business customers were charged VAT. Registry requests now ask for uncompressed answers.
+
+= 0.1.3 =
+* Fix: a number VIES rejects (invalid input or blocked) is now treated as invalid, not as the registry being unavailable.
+* When VIES turns the store away for too many requests, VAT is charged and the number checked later, whatever the outage setting.
+* Uninstall removes the plugin's own options one by one instead of flushing the whole object cache.
+
+= 0.1.2 =
+* Fix: with "When a registry is unavailable" set to exempt the VAT, a number that was never checked against a registry is now charged VAT and flagged, and only a registry that was tried and failed leads to the exemption.
 
 = 0.1.1 =
 * First release.

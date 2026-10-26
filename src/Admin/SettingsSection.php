@@ -170,7 +170,7 @@ class SettingsSection {
 						'exempt_pending' => __( 'Accept the order, exempt VAT and re-check later', 'vatright' ),
 						'reject'         => __( 'Do not accept the order', 'vatright' ),
 					),
-					'desc_tip' => __( 'Charging VAT and flagging the order is the safe choice: you can refund the VAT once the number validates.', 'vatright' ),
+					'desc_tip' => __( 'Charging VAT and flagging the order is the safe choice: you can refund the VAT once the number validates. Exempting while a registry is down lets anyone enter a made-up number for that country, and the VAT is yours to recover if the re-check fails.', 'vatright' ),
 				)
 			),
 			$this->field(
