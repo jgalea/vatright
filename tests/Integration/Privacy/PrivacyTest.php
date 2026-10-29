@@ -4,10 +4,12 @@ namespace Vatright\Tests\Integration\Privacy;
 
 use Vatright\Domain\ValidationResult;
 use Vatright\Domain\VatNumber;
+use Vatright\Migration\LegacyData;
 use Vatright\Orders\DecisionStore;
 use Vatright\Privacy\Privacy;
 use Vatright\Registry\ValidationCache;
 use Vatright\Settings;
+use WC_Customer;
 
 require_once __DIR__ . '/PrivacyTestCase.php';
 
@@ -194,6 +196,45 @@ class PrivacyTest extends PrivacyTestCase {
 		$this->assertSame( '', get_user_meta( $user_id, '_wc_other/vatright/vat-number', true ) );
 		$this->assertSame( 'DE123456789', wc_get_order( $order->get_id() )->get_meta( DecisionStore::NUMBER_META ), 'The order keeps its VAT record' );
 		$this->assertNull( $this->cache->get( $number, null ) );
+	}
+
+	public function test_eraser_removes_numbers_another_plugin_saved_on_the_account(): void {
+		$user_id = self::factory()->user->create( array( 'user_email' => 'legacy@example.com' ) );
+		update_user_meta( $user_id, 'vat_number', 'DE123456789' );
+		update_user_meta( $user_id, 'billing_eu_vat_number', 'DE123456789' );
+
+		$result = $this->privacy->erase( 'legacy@example.com' );
+
+		$this->assertTrue( $result['items_removed'] );
+		$this->assertFalse( metadata_exists( 'user', $user_id, 'vat_number' ) );
+		$this->assertFalse( metadata_exists( 'user', $user_id, 'billing_eu_vat_number' ) );
+		$this->assertSame( '', LegacyData::customer_number( new WC_Customer( $user_id ) ) );
+	}
+
+	public function test_erased_account_number_does_not_come_back_from_an_older_key(): void {
+		$user_id = $this->account_with_saved_number();
+		update_user_meta( $user_id, 'billing_vat_number', 'DE123456789' );
+
+		$this->privacy->erase( 'saved@example.com' );
+
+		$this->assertSame( '', LegacyData::customer_number( new WC_Customer( $user_id ) ) );
+	}
+
+	public function test_eraser_scrubs_an_order_only_another_plugin_numbered(): void {
+		$order = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
+		$order->set_billing_email( self::EMAIL );
+		$order->set_date_created( strtotime( ( $this->year() - 12 ) . '-06-01 10:00:00 UTC' ) );
+		$order->update_meta_data( '_billing_vat_number', 'DE123456789' );
+		$order->update_meta_data( '_vat_number', 'DE123456789' );
+		$order->save();
+
+		$result = $this->privacy->erase( self::EMAIL );
+
+		$this->assertTrue( $result['items_removed'] );
+		$order = wc_get_order( $order->get_id() );
+		$this->assertFalse( $order->meta_exists( '_billing_vat_number' ) );
+		$this->assertFalse( $order->meta_exists( '_vat_number' ) );
+		$this->assertSame( '', LegacyData::order_number( $order ) );
 	}
 
 	private function account_with_saved_number(): int {

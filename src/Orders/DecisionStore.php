@@ -32,6 +32,7 @@ final class DecisionStore {
 		if ( '' !== (string) ( $record['vat_number']['canonical'] ?? '' ) ) {
 			$order->update_meta_data( self::NUMBER_META, $record['vat_number']['canonical'] );
 		}
+		CompatKeys::write( $order, $decision );
 
 		if ( null !== $previous && $previous->id() === $decision->id() ) {
 			return;

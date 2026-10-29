@@ -2,6 +2,7 @@
 
 namespace Vatright\Tests\Integration\Orders;
 
+use Vatright\Migration\LegacyData;
 use Vatright\Orders\AdminRecalc;
 use Vatright\Orders\DecisionStore;
 
@@ -179,6 +180,25 @@ class AdminRecalcTest extends LifecycleTestCase {
 		do_action( 'woocommerce_process_shop_order_meta', $order->get_id() ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- firing Woo's hook.
 		$this->assertSame( '', $this->fresh( $order )->get_meta( DecisionStore::NUMBER_META ) );
 		$_POST = array();
+	}
+
+	public function test_clearing_a_number_another_plugin_left_keeps_it_cleared() {
+		$order = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
+		$order->update_meta_data( '_billing_vat_number', self::NUMBER );
+		$order->save();
+		$this->admin();
+
+		$_POST[ AdminRecalc::FIELD ] = self::NUMBER;
+		do_action( 'woocommerce_process_shop_order_meta', $order->get_id() ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- firing Woo's hook.
+		$this->assertFalse( $this->fresh( $order )->meta_exists( DecisionStore::NUMBER_META ), 'Saving the number shown unchanged stores nothing' );
+
+		$_POST[ AdminRecalc::FIELD ] = '';
+		do_action( 'woocommerce_process_shop_order_meta', $order->get_id() ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- firing Woo's hook.
+		$_POST = array();
+
+		$order = $this->fresh( $order );
+		$this->assertSame( '', LegacyData::order_number( $order ) );
+		$this->assertSame( self::NUMBER, $order->get_meta( '_billing_vat_number' ), 'The other plugin\'s key is left as it was' );
 	}
 
 	public function test_save_number_needs_the_capability() {

@@ -7,6 +7,7 @@ use Vatright\Domain\FormatCheck;
 use Vatright\Domain\Territory;
 use Vatright\Domain\ValidationResult;
 use Vatright\Domain\VatNumber;
+use Vatright\Migration\LegacyData;
 use Vatright\Plugin;
 use Vatright\Registry\Validator;
 use Vatright\Settings;
@@ -80,6 +81,7 @@ class VatField {
 	public function register(): void {
 		add_action( 'woocommerce_init', array( $this, 'register_block_field' ) );
 		add_action( 'woocommerce_set_additional_field_value', array( $this, 'mirror_block_value' ), 10, 4 );
+		add_filter( 'woocommerce_get_default_value_for_' . self::FIELD_ID, array( $this, 'block_default' ), 10, 3 );
 
 		add_filter( 'woocommerce_billing_fields', array( $this, 'add_classic_field' ) );
 		add_filter( 'woocommerce_form_field', array( $this, 'add_classic_disclosure' ), 10, 2 );
@@ -107,7 +109,7 @@ class VatField {
 				'location'                   => 'contact',
 				'type'                       => 'text',
 				'required'                   => self::block_required(),
-				// InvoiceText adds the number to the order totals, which every order shows.
+				// BillingAddress adds the number to the billing address, which every order shows.
 				'show_in_order_confirmation' => false,
 				'hidden'                     => array(
 					'type'       => 'object',
@@ -228,6 +230,24 @@ class VatField {
 	}
 
 	/**
+	 * Fills the block field on the checkout and My Account for a customer
+	 * whose number WooCommerce's own copy doesn't hold: one saved at
+	 * registration, or left by another VAT plugin.
+	 *
+	 * @param mixed  $value
+	 * @param string $group
+	 * @param mixed  $wc_object
+	 * @return mixed
+	 */
+	public function block_default( $value, $group, $wc_object ) {
+		if ( null !== $value || ! $wc_object instanceof WC_Customer ) {
+			return $value;
+		}
+		$number = LegacyData::customer_number( $wc_object );
+		return '' === $number ? null : $number;
+	}
+
+	/**
 	 * @param array<string,mixed> $fields
 	 * @return array<string,mixed>
 	 */
@@ -314,7 +334,7 @@ class VatField {
 		if ( self::CLASSIC_FIELD !== $input || ! WC()->customer instanceof WC_Customer ) { // @phpstan-ignore instanceof.alwaysTrue
 			return $value;
 		}
-		return (string) WC()->customer->get_meta( InputGatherer::NUMBER_META );
+		return LegacyData::customer_number( WC()->customer );
 	}
 
 	/**
@@ -342,7 +362,7 @@ class VatField {
 	 * @param \WC_Order $order
 	 */
 	public function copy_to_order( $order ): void {
-		$number = WC()->customer instanceof WC_Customer ? (string) WC()->customer->get_meta( InputGatherer::NUMBER_META ) : ''; // @phpstan-ignore instanceof.alwaysTrue
+		$number = WC()->customer instanceof WC_Customer ? LegacyData::customer_number( WC()->customer ) : ''; // @phpstan-ignore instanceof.alwaysTrue
 		if ( '' !== $number ) {
 			$order->update_meta_data( InputGatherer::NUMBER_META, $number );
 		}
@@ -407,7 +427,7 @@ class VatField {
 			'label'         => __( 'VAT number', 'vatright' ),
 			'wrapper_class' => 'form-field-wide',
 			'show'          => true,
-			'value'         => $order instanceof \WC_Order ? (string) $order->get_meta( InputGatherer::NUMBER_META ) : '',
+			'value'         => $order instanceof \WC_Order ? LegacyData::order_number( $order ) : '',
 		);
 		return $fields;
 	}

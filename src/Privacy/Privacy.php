@@ -5,6 +5,7 @@ namespace Vatright\Privacy;
 use Vatright\Checkout\InputGatherer;
 use Vatright\Checkout\VatField;
 use Vatright\Domain\VatNumber;
+use Vatright\Migration\LegacyData;
 use Vatright\Orders\DecisionStore;
 use Vatright\Registry\ValidationCache;
 use Vatright\Ledger\Schema;
@@ -68,6 +69,8 @@ class Privacy {
 		$user    = 1 === $page ? get_user_by( 'email', $email ) : false;
 		$user_id = false === $user ? 0 : $user->ID;
 		$saved   = 0 === $user_id ? '' : $this->saved_number( $user_id );
+		$legacy  = '' === $saved ? LegacyData::customer( $user_id ) : null;
+		$saved   = null === $legacy ? $saved : $legacy['number'];
 
 		if ( '' !== $saved ) {
 			$items[] = array(
@@ -93,7 +96,7 @@ class Privacy {
 				),
 				array(
 					'name'  => __( 'VAT number', 'vatright' ),
-					'value' => (string) $order->get_meta( DecisionStore::NUMBER_META ),
+					'value' => LegacyData::order_number( $order ),
 				),
 				array(
 					'name'  => __( 'Registered name', 'vatright' ),
@@ -179,9 +182,13 @@ class Privacy {
 		$user     = get_user_by( 'email', $email );
 
 		// The account copy is not a VAT record (each order keeps its own), so it goes regardless of retention.
-		if ( 1 === $page && false !== $user && '' !== $this->saved_number( $user->ID ) ) {
-			$number = VatNumber::parse( $this->saved_number( $user->ID ), '' );
-			if ( null !== $number ) {
+		$legacy = false === $user ? null : LegacyData::customer( $user->ID );
+		if ( 1 === $page && false !== $user && ( '' !== $this->saved_number( $user->ID ) || null !== $legacy ) ) {
+			foreach ( array( $this->saved_number( $user->ID ), null === $legacy ? '' : $legacy['number'] ) as $saved ) {
+				$number = VatNumber::parse( $saved, '' );
+				if ( null === $number ) {
+					continue;
+				}
 				$this->cache->forget( $number, null );
 				foreach ( $stores as $store ) {
 					$this->cache->forget( $number, $store );
@@ -190,6 +197,13 @@ class Privacy {
 			foreach ( self::ACCOUNT_META as $key ) {
 				delete_user_meta( $user->ID, $key );
 			}
+			foreach ( LegacyData::SOURCES as $definition ) {
+				foreach ( $definition['user_number'] as $key ) {
+					delete_user_meta( $user->ID, $key );
+				}
+			}
+			// An empty value is a cleared number, so no older key can bring it back.
+			update_user_meta( $user->ID, InputGatherer::NUMBER_META, '' );
 			$removed = true;
 		}
 
@@ -198,7 +212,7 @@ class Privacy {
 				continue;
 			}
 
-			$number = VatNumber::parse( (string) $order->get_meta( DecisionStore::NUMBER_META ), '' );
+			$number = VatNumber::parse( LegacyData::order_number( $order ), $order->get_billing_country() );
 			if ( null !== $number ) {
 				$this->cache->forget( $number, null );
 				foreach ( $stores as $store ) {

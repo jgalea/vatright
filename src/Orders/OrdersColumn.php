@@ -5,6 +5,7 @@ namespace Vatright\Orders;
 use Vatright\Domain\Rule;
 use Vatright\Domain\Scheme;
 use Vatright\Domain\ValidationResult;
+use Vatright\Migration\LegacyData;
 use WC_Order;
 
 class OrdersColumn {
@@ -155,11 +156,16 @@ class OrdersColumn {
 	private function render( WC_Order $order ): void {
 		$decision = DecisionStore::get( $order );
 		if ( null === $decision ) {
+			$number = LegacyData::order_number( $order );
+			if ( '' !== $number ) {
+				echo '<div class="vatright-vat"><strong>' . esc_html( $number ) . '</strong></div>';
+			}
 			return;
 		}
 		$record = $decision->to_array();
 		$flags  = (array) $record['flags'];
 		$number = (string) ( $record['vat_number']['canonical'] ?? '' );
+		$number = '' === $number ? LegacyData::order_number( $order ) : $number;
 
 		echo '<div class="vatright-vat">';
 		if ( '' !== $number ) {

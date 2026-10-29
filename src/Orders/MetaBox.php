@@ -4,6 +4,7 @@ namespace Vatright\Orders;
 
 use Vatright\Domain\Rule;
 use Vatright\Domain\ValidationResult;
+use Vatright\Migration\LegacyData;
 use WP_Post;
 use WC_Order;
 
@@ -90,7 +91,7 @@ class MetaBox {
 		echo '<p><strong>' . esc_html( self::headline( $record ) ) . '</strong></p>';
 
 		$recorded = (string) ( $record['vat_number']['canonical'] ?? '' );
-		$current  = (string) $order->get_meta( DecisionStore::NUMBER_META );
+		$current  = LegacyData::order_number( $order );
 		$billing  = strtoupper( $order->get_billing_country() );
 		if ( $recorded !== $current || ( '' !== $billing && $billing !== (string) $record['customer']['billing']['country'] ) ) {
 			echo '<p class="notice notice-warning inline"><span>' . esc_html__( 'The VAT number or billing country changed since this decision was recorded. Recalculate taxes to update it.', 'vatright' ) . '</span></p>';

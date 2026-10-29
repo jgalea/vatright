@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       VAT Right – EU VAT & OSS for WooCommerce
  * Description:       Decides, applies and records EU VAT treatment on every WooCommerce order.
- * Version:           0.1.6
+ * Version:           0.1.7
  * Requires at least: 6.6
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VATRIGHT_VERSION', '0.1.6' );
+define( 'VATRIGHT_VERSION', '0.1.7' );
 define( 'VATRIGHT_FILE', __FILE__ );
 define( 'VATRIGHT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VATRIGHT_URL', plugin_dir_url( __FILE__ ) );

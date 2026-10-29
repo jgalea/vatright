@@ -4,6 +4,8 @@ namespace Vatright\Privacy;
 
 use DateTimeImmutable;
 use Vatright\Ledger\Schema;
+use Vatright\Migration\LegacyData;
+use Vatright\Orders\CompatKeys;
 use Vatright\Orders\DecisionStore;
 use Vatright\Settings;
 use WC_Order;
@@ -85,7 +87,10 @@ class Retention {
 	}
 
 	public static function holds_personal_data( WC_Order $order ): bool {
-		if ( '' !== (string) $order->get_meta( DecisionStore::NUMBER_META ) ) {
+		if ( '' !== (string) $order->get_meta( DecisionStore::NUMBER_META ) || '' !== (string) $order->get_meta( LegacyData::IMPORTED_META ) ) {
+			return true;
+		}
+		if ( ! $order->meta_exists( self::SCRUBBED_META ) && null !== LegacyData::order( $order ) ) {
 			return true;
 		}
 		$record = json_decode( (string) $order->get_meta( DecisionStore::META ), true );
@@ -108,6 +113,13 @@ class Retention {
 		$changed = self::holds_personal_data( $order );
 
 		$order->delete_meta_data( DecisionStore::NUMBER_META );
+		$order->delete_meta_data( LegacyData::IMPORTED_META );
+		CompatKeys::remove( $order );
+		foreach ( LegacyData::SOURCES as $definition ) {
+			foreach ( $definition['order_number'] as $key ) {
+				$order->delete_meta_data( $key );
+			}
+		}
 		$record = json_decode( (string) $order->get_meta( DecisionStore::META ), true );
 		if ( is_array( $record ) ) {
 			$record['vat_number'] = null;

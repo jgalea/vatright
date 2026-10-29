@@ -37,7 +37,7 @@ class InvoiceTextTest extends LifecycleTestCase {
 	public function test_reverse_charge_services_row_has_the_article_196_text_verbatim() {
 		$rows = $this->values( $this->exempt_order() );
 
-		$this->assertContains( 'Customer VAT number: ' . self::NUMBER, $rows );
+		$this->assertSame( array(), preg_grep( '/' . self::NUMBER . '/', $rows ), 'The number is in the billing address, not the totals' );
 		$this->assertContains( 'VAT note: ' . self::ART196, $rows );
 		$this->assertContains( 'VAT number consultation reference: WAPIAAAA', $rows );
 	}
@@ -77,31 +77,29 @@ class InvoiceTextTest extends LifecycleTestCase {
 	/**
 	 * @dataProvider email_templates
 	 */
-	public function test_item_totals_rows_render_in_customer_email( string $template, bool $plain ) {
+	public function test_item_totals_rows_render_in_customer_email( string $details, string $addresses, bool $plain ) {
 		$order = $this->exempt_order();
 		$email = WC()->mailer()->get_emails()['WC_Email_Customer_Invoice'];
-
-		$out = wc_get_template_html(
-			$template,
-			array(
-				'order'         => $order,
-				'sent_to_admin' => false,
-				'plain_text'    => $plain,
-				'email'         => $email,
-			)
+		$args  = array(
+			'order'         => $order,
+			'sent_to_admin' => false,
+			'plain_text'    => $plain,
+			'email'         => $email,
 		);
 
+		$out = wc_get_template_html( $details, $args ) . wc_get_template_html( $addresses, $args );
+
 		$this->assertStringContainsString( self::ART196, $out );
-		$this->assertStringContainsString( self::NUMBER, $out );
+		$this->assertSame( 1, substr_count( $out, self::NUMBER ), 'The number shows once, in the billing address' );
 	}
 
 	/**
-	 * @return array<string,array{0:string,1:bool}>
+	 * @return array<string,array{0:string,1:string,2:bool}>
 	 */
 	public function email_templates(): array {
 		return array(
-			'html'  => array( 'emails/email-order-details.php', false ),
-			'plain' => array( 'emails/plain/email-order-details.php', true ),
+			'html'  => array( 'emails/email-order-details.php', 'emails/email-addresses.php', false ),
+			'plain' => array( 'emails/plain/email-order-details.php', 'emails/plain/email-addresses.php', true ),
 		);
 	}
 
@@ -111,7 +109,7 @@ class InvoiceTextTest extends LifecycleTestCase {
 		add_filter(
 			'gettext',
 			static function ( $translated, $text, $domain ) {
-				return 'vatright' === $domain && 'Customer VAT number' === $text ? 'Umsatzsteuer-ID des Kunden' : $translated;
+				return 'vatright' === $domain && 'VAT note' === $text ? 'Hinweis' : $translated;
 			},
 			10,
 			3
@@ -127,8 +125,7 @@ class InvoiceTextTest extends LifecycleTestCase {
 
 		$rows = $this->values( $order );
 
-		$this->assertContains( 'Umsatzsteuer-ID des Kunden: ' . self::NUMBER, $rows, 'Labels go through gettext' );
-		$this->assertContains( 'VAT note: Steuerschuldnerschaft des Leistungsempfängers', $rows );
+		$this->assertContains( 'Hinweis: Steuerschuldnerschaft des Leistungsempfängers', $rows, 'Labels go through gettext' );
 		$this->assertSame( self::ART138, InvoiceText::legal_text( 'art138' ), 'Other keys keep their text' );
 	}
 

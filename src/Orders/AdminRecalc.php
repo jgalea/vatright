@@ -7,6 +7,7 @@ use Vatright\Checkout\InputGatherer;
 use Vatright\Domain\Decision;
 use Vatright\Domain\Rules;
 use Vatright\Domain\VatNumber;
+use Vatright\Migration\LegacyData;
 use Throwable;
 use WC_Order;
 
@@ -86,10 +87,13 @@ class AdminRecalc {
 		$parsed = '' === $raw ? null : VatNumber::parse( $raw, $order->get_billing_country() );
 		$number = null === $parsed ? $raw : $parsed->canonical();
 
-		if ( $number === (string) $order->get_meta( DecisionStore::NUMBER_META ) ) {
+		if ( LegacyData::order_number( $order ) === $number ) {
 			return;
 		}
-		if ( '' === $number ) {
+		if ( '' === $number && '' === (string) $order->get_meta( DecisionStore::NUMBER_META ) ) {
+			// Clearing a number another plugin left: an empty value of ours stops it being read.
+			$order->update_meta_data( DecisionStore::NUMBER_META, '' );
+		} elseif ( '' === $number ) {
 			$order->delete_meta_data( DecisionStore::NUMBER_META );
 		} else {
 			$order->update_meta_data( DecisionStore::NUMBER_META, $number );

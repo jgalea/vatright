@@ -7,9 +7,9 @@ use Vatright\Settings;
 use WC_Order;
 
 /**
- * Adds the customer's VAT number and the legal wording of the recorded
- * decision to the order totals, which Woo's order pages, emails (HTML and
- * plain text) and most invoice plugins render.
+ * Adds the legal wording of the recorded decision to the order totals, which
+ * Woo's order pages, emails (HTML and plain text) and most invoice plugins
+ * render. The customer's VAT number is in the billing address instead.
  */
 class InvoiceText {
 
@@ -38,14 +38,6 @@ class InvoiceText {
 			return $rows;
 		}
 		$record = $decision->to_array();
-
-		$number = (string) ( $record['vat_number']['canonical'] ?? '' );
-		if ( '' !== $number ) {
-			$rows['vatright_number'] = array(
-				'label' => __( 'Customer VAT number', 'vatright' ),
-				'value' => esc_html( $number ),
-			);
-		}
 
 		foreach ( $decision->legal_text() as $key ) {
 			$text = self::legal_text( $key, $order );

@@ -10,5 +10,7 @@ parameters:
 		- uninstall.php
 	bootstrapFiles:
 		- vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+	scanFiles:
+		- tests/phpstan/wp-cli-stubs.php
 	scanDirectories:
 		- vendor/php-stubs/woocommerce-stubs

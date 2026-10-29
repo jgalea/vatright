@@ -8,6 +8,7 @@ use Vatright\Domain\Line;
 use Vatright\Domain\VatNumber;
 use Vatright\Ledger\Fx;
 use Vatright\Ledger\ThresholdTracker;
+use Vatright\Migration\LegacyData;
 use Vatright\Orders\DecisionStore;
 use Vatright\Registry\Validator;
 use Vatright\Settings;
@@ -82,7 +83,7 @@ class InputGatherer {
 				'shipping'          => $shipping,
 				'shipping_postcode' => '' === $shipping ? '' : $customer->get_shipping_postcode(),
 				'pickup'            => (bool) array_intersect( wc_get_chosen_shipping_method_ids(), self::PICKUP_METHODS ),
-				'number'            => (string) $customer->get_meta( self::NUMBER_META ),
+				'number'            => LegacyData::customer_number( $customer ),
 				'company'           => $customer->get_billing_company(),
 				'user_id'           => $customer->get_id(),
 				'ip'                => $this->ip_country( WC_Geolocation::get_ip_address() ),
@@ -138,7 +139,7 @@ class InputGatherer {
 				'shipping'          => $shipping,
 				'shipping_postcode' => '' === $shipping ? '' : $order->get_shipping_postcode(),
 				'pickup'            => (bool) array_intersect( $methods, self::PICKUP_METHODS ),
-				'number'            => (string) $order->get_meta( self::NUMBER_META ),
+				'number'            => LegacyData::order_number( $order ),
 				'company'           => '',
 				'user_id'           => $order->get_customer_id(),
 				'ip'                => array_key_exists( 'ip', $evidence ) ? $evidence['ip'] : $this->ip_country( $order->get_customer_ip_address() ),

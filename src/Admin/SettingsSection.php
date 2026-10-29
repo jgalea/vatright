@@ -313,6 +313,16 @@ class SettingsSection {
 				'id'    => 'vatright_data',
 			),
 			$this->field(
+				'write_compat_keys',
+				'checkbox',
+				__( 'Invoice plugins', 'vatright' ),
+				$s->write_compat_keys() ? 'yes' : 'no',
+				array(
+					'desc'     => __( 'Also save the VAT number in the order fields other invoice plugins read', 'vatright' ),
+					'desc_tip' => __( 'Writes _billing_vat_number and _vat_number_is_valid, the fields WooCommerce EU VAT Number used, so invoice plugins built for it keep showing the number and the zero-rated note. A field another plugin filled is never replaced, and nothing is written while that plugin is active.', 'vatright' ),
+				)
+			),
+			$this->field(
 				'retention_years',
 				'number',
 				__( 'Keep VAT records for (years)', 'vatright' ),

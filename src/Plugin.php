@@ -80,9 +80,16 @@ class Plugin {
 		( new Orders\AdminRecalc( $gatherer, new Domain\Rules(), $steering ) )->register();
 		( new Orders\MetaBox( $revalidation ) )->register();
 		( new Orders\InvoiceText() )->register();
+		( new Orders\BillingAddress() )->register();
 		( new Orders\OrdersColumn() )->register();
 		( new Ledger\ThresholdNotifier( new Ledger\ThresholdTracker() ) )->register();
 		( new Integrations\Subscriptions( $gatherer, new Domain\Rules() ) )->register();
+		$importer = new Migration\Importer();
+		$importer->register();
+		( new Migration\ImportScreen( $importer ) )->register();
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			\WP_CLI::add_command( 'vatright import', new Migration\Cli( $importer ) );
+		}
 		self::$cart_steering = $steering;
 	}
 

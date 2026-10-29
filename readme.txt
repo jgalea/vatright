@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.6
+Stable tag: 0.1.7
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -72,6 +72,12 @@ Without credentials, GB numbers are only format-checked and a business customer 
 
 The plugin hooks into the WooCommerce Subscriptions renewal and switch hooks. A renewal is decided as a new sale: the subscription's stored registry answer is reused while it's fresh, otherwise the number is checked again, and the decision is stored on the renewal order. If a renewal can't be decided, VAT is charged. This has been tested against a stand-in for the Subscriptions hooks, not against the WooCommerce Subscriptions plugin itself.
 
+= Can I switch from another EU VAT plugin? =
+
+Yes. VAT Right reads the VAT numbers WooCommerce EU VAT Number, EU/UK VAT Validation Manager (WPFactory), Aelia EU VAT Assistant and EU/UK VAT Compliance (Simba) saved on orders and customers, so past orders, invoices and checkout keep them. Under WooCommerce > Settings > Tax > VAT Right, the import counts what it found, then copies the numbers, the validation results and the store's own VAT number into VAT Right in the background. It works with the other plugin deactivated, keeps any number VAT Right already holds and leaves the other plugin's data as it is. From the command line: `wp vatright import --dry-run`, then `wp vatright import`.
+
+VAT Right prints the customer's VAT number in the order's billing address, and also saves it in the `_billing_vat_number` and `_vat_number_is_valid` order fields invoice plugins read. Turn that off under Data > Invoice plugins.
+
 = What personal data does the plugin store, and for how long? =
 
 It stores the customer's VAT number, the registry's name, address and consultation number for it, and the IP country evidence used for digital sales, on the order, in the plugin's ledger table and, for logged-in customers, in their account. After the retention period (10 years by default, counted from the end of the year of the sale, which matches the OSS record-keeping period) the plugin removes the personal data from the decision record and ledger rows and keeps the scheme, rule, amounts and country evidence. Exporters and erasers are registered with the WordPress privacy tools. All plugin data is kept when you delete the plugin, unless you tick "Delete all plugin data when the plugin is deleted".
@@ -119,6 +125,13 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 5. The EU VAT reports: OSS return and EC Sales List.
 
 == Changelog ==
+
+= 0.1.7 =
+* New: import VAT numbers and settings from WooCommerce EU VAT Number, EU/UK VAT Validation Manager (WPFactory), EU/UK VAT Compliance (Simba) and Aelia EU VAT Assistant, under WooCommerce > Settings > Tax > VAT Right or with `wp vatright import`. A dry run shows the counts first; nothing is overwritten and the other plugin's data is left as it was.
+* New: until you import, VAT numbers another VAT plugin saved on orders and customer accounts are read in place, so past orders and saved numbers keep working after you switch.
+* New: the customer's VAT number now prints in the order's billing address, so invoice plugins that show the address show the number too.
+* New: VAT Right also saves the VAT number and validity in the order fields most invoice plugins read. On by default, and never written over another plugin's value.
+* Privacy: erasing a customer's data, and the retention clean-up, now also remove VAT numbers another VAT plugin saved on their orders and account.
 
 = 0.1.6 =
 * New: OSS return and EC Sales List reports for a month or any date range, as well as by quarter, in the screen, CSV and REST.

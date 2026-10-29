@@ -9,6 +9,7 @@ use Vatright\Domain\LineDecision;
 use Vatright\Domain\Rule;
 use Vatright\Domain\Scheme;
 use Vatright\Domain\Territory;
+use Vatright\Migration\LegacyData;
 use Vatright\Settings;
 use WC_Order;
 use WC_Order_Item_Product;
@@ -87,6 +88,12 @@ class Backfill {
 
 		list( $scheme, $rule ) = $this->scheme_and_rule( $order, $store, $customer, $postcode, $charged );
 
+		// A number imported from, or still only held by, another VAT plugin goes into the record with the verdict that plugin recorded.
+		$imported   = json_decode( (string) $order->get_meta( LegacyData::IMPORTED_META ), true );
+		$legacy     = is_array( $imported ) ? $imported : LegacyData::order( $order );
+		$number     = LegacyData::number_section( LegacyData::order_number( $order ), $billing );
+		$validation = null === $number || ! is_array( $legacy ) ? null : LegacyData::validation_section( (string) ( $legacy['status'] ?? '' ), (string) ( $legacy['source'] ?? '' ) );
+
 		$lines = array();
 		foreach ( $order->get_items() as $item ) {
 			if ( $item instanceof WC_Order_Item_Product ) {
@@ -126,8 +133,8 @@ class Backfill {
 				),
 				'local_pickup' => false,
 			),
-			null,
-			null,
+			$number,
+			$validation,
 			array(
 				'billing'        => $billing,
 				'shipping'       => $shipping,

@@ -48,6 +48,7 @@ class Settings {
 			'registration_vat_field'       => false,
 			'exempt_roles'                 => array(),
 			'refuse_name_mismatch'         => false,
+			'write_compat_keys'            => true,
 		);
 	}
 
@@ -176,6 +177,10 @@ class Settings {
 
 	public function refuse_name_mismatch(): bool {
 		return (bool) $this->value( 'refuse_name_mismatch' );
+	}
+
+	public function write_compat_keys(): bool {
+		return (bool) $this->value( 'write_compat_keys' );
 	}
 
 	/**
