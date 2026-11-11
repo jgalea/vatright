@@ -2,6 +2,7 @@
 
 namespace Vatright\Privacy;
 
+use Automattic\WooCommerce\Utilities\OrderUtil;
 use DateTimeImmutable;
 use Vatright\Ledger\Schema;
 use Vatright\Migration\LegacyData;
@@ -34,28 +35,36 @@ class Retention {
 	 */
 	public function run_batch( int $offset = 0 ): void {
 		$cutoff = new DateTimeImmutable( ( (int) wp_date( 'Y' ) - Settings::get()->retention_years() ) . '-01-01', wp_timezone() );
-		/** @var WC_Order[] $orders */
-		$orders = wc_get_orders(
-			array(
-				'type'         => 'shop_order',
-				'status'       => 'any',
-				'date_created' => '<' . $cutoff->getTimestamp(),
-				'meta_query'   => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					array(
-						'key'     => DecisionStore::META,
-						'compare' => 'EXISTS',
-					),
-					array(
-						'key'     => self::SCRUBBED_META,
-						'compare' => 'NOT EXISTS',
-					),
+		$args   = array(
+			'type'         => 'shop_order',
+			'status'       => 'any',
+			'date_created' => '<' . $cutoff->getTimestamp(),
+			'meta_query'   => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				array(
+					'key'     => DecisionStore::META,
+					'compare' => 'EXISTS',
 				),
-				'orderby'      => 'ID',
-				'order'        => 'ASC',
-				'limit'        => self::BATCH,
-				'offset'       => $offset,
-			)
+				array(
+					'key'     => self::SCRUBBED_META,
+					'compare' => 'NOT EXISTS',
+				),
+			),
+			'orderby'      => 'ID',
+			'order'        => 'ASC',
+			'limit'        => self::BATCH,
+			'offset'       => $offset,
 		);
+		$legacy = ! OrderUtil::custom_orders_table_usage_is_enabled();
+		if ( $legacy ) {
+			add_filter( 'woocommerce_order_data_store_cpt_query_unsupported_args', array( $this, 'allow_meta_query' ) );
+			add_filter( 'woocommerce_order_data_store_cpt_get_orders_query', array( $this, 'map_meta_query' ), 10, 2 );
+		}
+		/** @var WC_Order[] $orders */
+		$orders = wc_get_orders( $args );
+		if ( $legacy ) {
+			remove_filter( 'woocommerce_order_data_store_cpt_query_unsupported_args', array( $this, 'allow_meta_query' ) );
+			remove_filter( 'woocommerce_order_data_store_cpt_get_orders_query', array( $this, 'map_meta_query' ), 10 );
+		}
 
 		$skipped = 0;
 		foreach ( $orders as $order ) {
@@ -69,6 +78,29 @@ class Retention {
 		if ( count( $orders ) === self::BATCH ) {
 			as_enqueue_async_action( self::HOOK, array( $offset + $skipped ), self::AS_GROUP );
 		}
+	}
+
+	/**
+	 * @param string[] $args
+	 * @return string[]
+	 */
+	public function allow_meta_query( $args ): array {
+		return array_values( array_diff( (array) $args, array( 'meta_query' ) ) );
+	}
+
+	/**
+	 * The posts order store drops meta_query from wc_get_orders().
+	 *
+	 * @param array<string,mixed> $wp_query_args
+	 * @param array<string,mixed> $query_vars
+	 * @return array<string,mixed>
+	 */
+	public function map_meta_query( $wp_query_args, $query_vars ): array {
+		$wp_query_args = (array) $wp_query_args;
+		if ( ! empty( $query_vars['meta_query'] ) ) {
+			$wp_query_args['meta_query'] = array_merge( (array) ( $wp_query_args['meta_query'] ?? array() ), $query_vars['meta_query'] ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+		}
+		return $wp_query_args;
 	}
 
 	public static function retained_until( WC_Order $order ): DateTimeImmutable {

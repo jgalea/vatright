@@ -3,6 +3,7 @@
 namespace Vatright\Tests\Integration\Privacy;
 
 use Vatright\Migration\LegacyData;
+use Vatright\Orders\DecisionStore;
 use Vatright\Privacy\Retention;
 
 require_once __DIR__ . '/PrivacyTestCase.php';
@@ -21,6 +22,27 @@ class RetentionTest extends PrivacyTestCase {
 		$this->assertNotNull( $this->record( $recent->get_id() )['vat_number'] );
 		$this->assertSame( 'DE123456789', $this->ledger_vat( $recent->get_id() ) );
 		$this->assertSame( '', (string) wc_get_order( $recent->get_id() )->get_meta( Retention::SCRUBBED_META ) );
+	}
+
+	public function test_retention_job_leaves_old_orders_without_a_decision_record_alone(): void {
+		$order = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
+		$order->set_date_created( strtotime( ( $this->year() - 11 ) . '-06-01 10:00:00 UTC' ) );
+		$order->delete_meta_data( DecisionStore::META );
+		$order->save();
+
+		( new Retention() )->run_batch( 0 );
+
+		$this->assertFalse( wc_get_order( $order->get_id() )->meta_exists( Retention::SCRUBBED_META ) );
+	}
+
+	public function test_retention_job_skips_orders_already_scrubbed(): void {
+		$order = $this->vat_order( $this->year() - 11 );
+		$order->update_meta_data( Retention::SCRUBBED_META, '2020-01-01T00:00:00Z' );
+		$order->save();
+
+		( new Retention() )->run_batch( 0 );
+
+		$this->assertNotNull( $this->record( $order->get_id() )['vat_number'] );
 	}
 
 	public function test_scrub_removes_the_import_record(): void {
