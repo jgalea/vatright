@@ -38,6 +38,9 @@ class Revalidation {
 	/** @var Validator */
 	private $validator;
 
+	/** @var array<int,string> */
+	private $held_emails = array();
+
 	public function __construct( Validator $validator ) {
 		$this->validator = $validator;
 	}
@@ -118,7 +121,7 @@ class Revalidation {
 	 * Asks the registry again, bypassing the cache, and settles the order's
 	 * record. Returns what the registry said.
 	 */
-	public function recheck( WC_Order $order, string $trigger, int $actor = 0 ): string {
+	public function recheck( WC_Order $order, string $trigger, int $actor = 0, bool $hold_emails = false ): string {
 		$decision = DecisionStore::get( $order );
 		if ( null === $decision ) {
 			return self::NONE;
@@ -138,11 +141,11 @@ class Revalidation {
 
 		$status = $result->status();
 		if ( ValidationResult::VALID === $status ) {
-			$this->settle_valid( $order, $decision, $result, $trigger, $actor );
+			$this->settle_valid( $order, $decision, $result, $trigger, $actor, $hold_emails );
 			return self::VALID;
 		}
 		if ( ValidationResult::INVALID === $status || ValidationResult::FORMAT_INVALID === $status ) {
-			$this->settle_invalid( $order, $decision, $result, $trigger, $actor );
+			$this->settle_invalid( $order, $decision, $result, $trigger, $actor, $hold_emails );
 			return self::INVALID;
 		}
 
@@ -150,7 +153,7 @@ class Revalidation {
 		return self::UNAVAILABLE;
 	}
 
-	private function settle_valid( WC_Order $order, Decision $decision, ValidationResult $result, string $trigger, int $actor ): void {
+	private function settle_valid( WC_Order $order, Decision $decision, ValidationResult $result, string $trigger, int $actor, bool $hold_email ): void {
 		$refund_due = in_array( self::PENDING_FLAG, $decision->flags(), true ) && ! $decision->is_vat_exempt();
 		DecisionStore::apply( $order, $this->patched( $decision, $result, $trigger, $refund_due ? 'validated_after_outage' : null ), $trigger, $actor );
 		$order->save();
@@ -160,10 +163,10 @@ class Revalidation {
 			return;
 		}
 		$order->add_order_note( __( 'VAT was charged because the registry was unavailable. The number is valid, so the customer may be due a refund of the VAT.', 'vatright' ) );
-		$this->notify( $order, RevalidatedEmail::REFUND );
+		$this->notify( $order, RevalidatedEmail::REFUND, $hold_email );
 	}
 
-	private function settle_invalid( WC_Order $order, Decision $decision, ValidationResult $result, string $trigger, int $actor ): void {
+	private function settle_invalid( WC_Order $order, Decision $decision, ValidationResult $result, string $trigger, int $actor, bool $hold_email ): void {
 		$unfounded = $this->is_zero_rated( $decision );
 		DecisionStore::apply( $order, $this->patched( $decision, $result, $trigger, $unfounded ? 'invalid_after_exemption' : null ), $trigger, $actor );
 		$order->save();
@@ -173,7 +176,7 @@ class Revalidation {
 			return;
 		}
 		$order->add_order_note( __( 'VAT was not charged on this order, but the registry reports the VAT number as invalid. VAT may be due.', 'vatright' ) );
-		$this->notify( $order, RevalidatedEmail::INVALID );
+		$this->notify( $order, RevalidatedEmail::INVALID, $hold_email );
 	}
 
 	private function is_zero_rated( Decision $decision ): bool {
@@ -205,8 +208,27 @@ class Revalidation {
 		return Decision::from_array( $record );
 	}
 
-	private function notify( WC_Order $order, string $kind ): void {
+	/**
+	 * Sends the emails a batch of re-checks held back, once the whole batch
+	 * has settled.
+	 */
+	public function send_held_emails(): void {
+		$held              = $this->held_emails;
+		$this->held_emails = array();
+		foreach ( $held as $order_id => $kind ) {
+			$order = wc_get_order( $order_id );
+			if ( $order instanceof WC_Order ) {
+				$this->notify( $order, $kind, false );
+			}
+		}
+	}
+
+	private function notify( WC_Order $order, string $kind, bool $hold ): void {
 		if ( ! Settings::get()->notify_admin_on_revalidation() ) {
+			return;
+		}
+		if ( $hold ) {
+			$this->held_emails[ $order->get_id() ] = $kind;
 			return;
 		}
 		$email = WC()->mailer()->get_emails()[ RevalidatedEmail::KEY ] ?? null;

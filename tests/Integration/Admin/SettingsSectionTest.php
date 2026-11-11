@@ -97,6 +97,13 @@ class SettingsSectionTest extends IntegrationTestCase {
 		$this->assertSame( array(), Settings::get()->exempt_roles(), 'Selecting no role clears the list' );
 	}
 
+	public function test_saving_refuses_the_sign_up_default_role_while_registration_is_open(): void {
+		update_option( 'default_role', 'subscriber' );
+		update_option( 'woocommerce_enable_myaccount_registration', 'yes' );
+		$this->save( array( 'exempt_roles' => array( 'subscriber', 'customer' ) ) );
+		$this->assertSame( array( 'subscriber' ), Settings::get()->exempt_roles(), 'WooCommerce gives new customers the customer role' );
+	}
+
 	public function test_exempt_roles_field_lists_roles_and_warns_it_is_not_a_legal_basis(): void {
 		update_option( Settings::OPTION, array( 'exempt_roles' => array( 'customer' ) ) );
 		Settings::reset();
@@ -120,6 +127,7 @@ class SettingsSectionTest extends IntegrationTestCase {
 			)
 		);
 		$this->assertSame( 'super-secret-value', Settings::get()->hmrc_client_secret() );
+		$this->assertSame( '', get_option( Settings::OPTION )['hmrc_client_secret'], 'the autoloaded settings option never holds the secret' );
 
 		ob_start();
 		WC_Admin_Settings::output_fields( $this->section->fields() );

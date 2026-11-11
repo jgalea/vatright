@@ -18,6 +18,7 @@ class Plugin {
 		}
 
 		Ledger\Schema::upgrade();
+		Settings::move_secret_out_of_settings();
 
 		$transport = new Registry\WpHttpTransport();
 		$vies      = new Registry\Vies( $transport );
@@ -79,6 +80,7 @@ class Plugin {
 		$revalidation->register();
 		( new Orders\AdminRecalc( $gatherer, new Domain\Rules(), $steering ) )->register();
 		( new Orders\MetaBox( $revalidation ) )->register();
+		( new Orders\BulkRecheck( $revalidation ) )->register();
 		( new Orders\InvoiceText() )->register();
 		( new Orders\BillingAddress() )->register();
 		( new Orders\OrdersColumn() )->register();

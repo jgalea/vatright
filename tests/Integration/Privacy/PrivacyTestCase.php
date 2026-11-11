@@ -5,9 +5,11 @@ namespace Vatright\Tests\Integration\Privacy;
 use Vatright\Ledger\Schema;
 use Vatright\Orders\DecisionStore;
 use Vatright\Tests\Integration\Orders\OrderTestCase;
+use Vatright\Tests\Support\SubscriptionStandIn;
 use WC_Order;
 
 require_once dirname( __DIR__ ) . '/Orders/OrderTestCase.php';
+require_once dirname( __DIR__, 2 ) . '/Support/SubscriptionStandIn.php';
 
 abstract class PrivacyTestCase extends OrderTestCase {
 
@@ -57,6 +59,54 @@ abstract class PrivacyTestCase extends OrderTestCase {
 			)
 		);
 		return $order;
+	}
+
+	protected function as_subscription( WC_Order $order, string $status ): WC_Order {
+		global $wpdb;
+		if ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+			$wpdb->update(
+				$wpdb->prefix . 'wc_orders',
+				array(
+					'type'   => 'shop_subscription',
+					'status' => 'wc-' . $status,
+				),
+				array( 'id' => $order->get_id() )
+			); // phpcs:ignore WordPress.DB
+		} else {
+			$wpdb->update(
+				$wpdb->posts,
+				array(
+					'post_type'   => 'shop_subscription',
+					'post_status' => 'wc-' . $status,
+				),
+				array( 'ID' => $order->get_id() )
+			); // phpcs:ignore WordPress.DB
+		}
+		if ( ! post_type_exists( 'shop_subscription' ) ) {
+			wc_register_order_type(
+				'shop_subscription',
+				array(
+					'public'                           => false,
+					'exclude_from_orders_screen'       => true,
+					'add_order_meta_boxes'             => false,
+					'exclude_from_order_count'         => true,
+					'exclude_from_order_views'         => true,
+					'exclude_from_order_reports'       => true,
+					'exclude_from_order_sales_reports' => true,
+					'class_name'                       => SubscriptionStandIn::class,
+				)
+			);
+			register_post_status( 'wc-active', array( 'internal' => false ) );
+		}
+		add_filter(
+			'wc_order_statuses',
+			static function ( $statuses ) {
+				return $statuses + array( 'wc-active' => 'Active' );
+			}
+		);
+		clean_post_cache( $order->get_id() );
+		wp_cache_flush();
+		return wc_get_order( $order->get_id() );
 	}
 
 	/**

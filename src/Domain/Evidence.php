@@ -27,12 +27,16 @@ final class Evidence {
 	 * Self-certification wins when set. Otherwise a country backed by at least
 	 * two pieces wins, falling back to billing alone. Conflict is raised
 	 * whenever two non-null pieces disagree, even when a majority exists, and
-	 * only a self-certification clears it.
+	 * only a self-certification clears it. Territories sharing one VAT area,
+	 * such as Monaco and France, count as the same country.
 	 *
 	 * @return array{country: ?string, conflict: bool, pieces: int}
 	 */
 	public function resolve(): array {
-		$pieces = array_values( array_filter( array( $this->billing, $this->shipping, $this->ip ), 'is_string' ) );
+		$pieces = array_map(
+			array( Territory::class, 'vat_country' ),
+			array_values( array_filter( array( $this->billing, $this->shipping, $this->ip ), 'is_string' ) )
+		);
 		$counts = array_count_values( $pieces );
 
 		if ( null !== $this->self_certified ) {

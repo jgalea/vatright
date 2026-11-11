@@ -8,6 +8,10 @@ class Settings {
 
 	const OPTION = 'vatright_settings';
 
+	const SECRET_OPTION = 'vatright_hmrc_secret';
+
+	const NON_EU_REGISTRATIONS = array( 'GB', 'NO', 'CH' );
+
 	/** @var Settings|null */
 	private static $instance = null;
 
@@ -47,6 +51,8 @@ class Settings {
 			'delete_data_on_uninstall'     => false,
 			'registration_vat_field'       => false,
 			'exempt_roles'                 => array(),
+			'non_eu_registrations'         => array(),
+			'blocked_vat_territories'      => array(),
 			'refuse_name_mismatch'         => false,
 			'write_compat_keys'            => true,
 		);
@@ -159,8 +165,22 @@ class Settings {
 		return (string) $this->value( 'hmrc_client_id' );
 	}
 
+	public static function move_secret_out_of_settings(): void {
+		$stored = get_option( self::OPTION, array() );
+		if ( ! is_array( $stored ) || empty( $stored['hmrc_client_secret'] ) ) {
+			return;
+		}
+		if ( false === get_option( self::SECRET_OPTION, false ) ) {
+			update_option( self::SECRET_OPTION, (string) $stored['hmrc_client_secret'], false );
+		}
+		$stored['hmrc_client_secret'] = '';
+		update_option( self::OPTION, $stored );
+		self::reset();
+	}
+
 	public function hmrc_client_secret(): string {
-		return (string) $this->value( 'hmrc_client_secret' );
+		$own = get_option( self::SECRET_OPTION, false );
+		return false !== $own ? (string) $own : (string) $this->value( 'hmrc_client_secret' );
 	}
 
 	public function report_currency(): string {
@@ -184,13 +204,55 @@ class Settings {
 	}
 
 	/**
-	 * @return string[] Slugs of existing roles whose orders are VAT-exempt.
+	 * @return string[] Countries VAT-chargeable products can't be sold into.
+	 */
+	public function blocked_vat_territories(): array {
+		$countries = array();
+		foreach ( (array) $this->value( 'blocked_vat_territories' ) as $country ) {
+			$country = strtoupper( trim( (string) $country ) );
+			if ( 1 === preg_match( '/^[A-Z]{2}$/', $country ) ) {
+				$countries[ $country ] = $country;
+			}
+		}
+		return array_values( $countries );
+	}
+
+	/**
+	 * @return string[] Non-EU countries the store is registered for VAT in.
+	 */
+	public function non_eu_registrations(): array {
+		return array_values( array_intersect( self::NON_EU_REGISTRATIONS, array_map( 'strtoupper', array_map( 'strval', (array) $this->value( 'non_eu_registrations' ) ) ) ) );
+	}
+
+	/**
+	 * @return string[] Every role a visitor can get by signing up: the default
+	 *                  role while WordPress or network registration is open, and
+	 *                  the role WooCommerce gives new customers while My account
+	 *                  or checkout registration is on.
+	 */
+	public static function self_registered_roles(): array {
+		$roles = array();
+		if ( get_option( 'users_can_register' ) || ( is_multisite() && 'none' !== get_site_option( 'registration', 'none' ) ) ) {
+			$roles[] = (string) get_option( 'default_role', '' );
+		}
+		if ( 'yes' === get_option( 'woocommerce_enable_myaccount_registration' ) || 'yes' === get_option( 'woocommerce_enable_signup_and_login_from_checkout' ) ) {
+			$customer = (array) apply_filters( 'woocommerce_new_customer_data', array( 'role' => 'customer' ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce's own hook.
+			$roles[]  = (string) ( $customer['role'] ?? 'customer' );
+		}
+		return array_values( array_unique( array_filter( $roles ) ) );
+	}
+
+	/**
+	 * @return string[] Slugs of existing roles whose orders are VAT-exempt. Roles
+	 *                  a visitor can get by signing up are left out, whenever
+	 *                  they were stored, since anyone could then hold them.
 	 */
 	public function exempt_roles(): array {
 		$stored = $this->value( 'exempt_roles' );
 		$roles  = array();
+		$signup = self::self_registered_roles();
 		foreach ( is_array( $stored ) ? $stored : array() as $role ) {
-			if ( is_string( $role ) && wp_roles()->is_role( $role ) ) {
+			if ( is_string( $role ) && ! in_array( $role, $signup, true ) && wp_roles()->is_role( $role ) ) {
 				$roles[ $role ] = $role;
 			}
 		}

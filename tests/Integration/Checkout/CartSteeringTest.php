@@ -230,8 +230,8 @@ class CartSteeringTest extends CheckoutTestCase {
 						$tax     = (float) WC()->cart->get_total_tax();
 						$charges = array_filter(
 							$decision->lines(),
-							static function ( LineDecision $line ): bool {
-								return TaxLocation::charges_line( $line );
+							static function ( LineDecision $line ) use ( $decision ): bool {
+								return TaxLocation::charges_line( $decision, $line );
 							}
 						);
 						$label   = sprintf( '%s %s %s number=%s oss=%d rule=%s', implode( '+', $supply ), $customer[0], $customer[1], $number, $oss, $decision->rule() );

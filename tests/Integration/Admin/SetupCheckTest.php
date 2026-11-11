@@ -22,9 +22,10 @@ class SetupCheckTest extends IntegrationTestCase {
 		update_option(
 			Settings::OPTION,
 			array(
-				'store_vat_number'   => 'MT12345634',
-				'hmrc_client_id'     => 'id',
-				'hmrc_client_secret' => 'secret',
+				'store_vat_number'            => 'MT12345634',
+				'hmrc_client_id'              => 'id',
+				'hmrc_client_secret'          => 'secret',
+				'self_certification_required' => true,
 			)
 		);
 		foreach ( Territory::EU as $iso ) {
@@ -53,6 +54,52 @@ class SetupCheckTest extends IntegrationTestCase {
 
 	public function test_clean_store_has_no_issues(): void {
 		$this->assertSame( array(), $this->ids() );
+	}
+
+	public function test_unrequired_self_certification_is_an_info_notice(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'            => 'MT12345634',
+				'hmrc_client_id'              => 'id',
+				'hmrc_client_secret'          => 'secret',
+				'self_certification_required' => false,
+			)
+		);
+		$this->assertContains( 'self_certification_optional', $this->ids() );
+	}
+
+	public function test_non_eu_rates_without_a_registration_are_reported(): void {
+		$this->insert_rate( 'GB', 20 );
+		$this->assertContains( 'non_eu_rates_not_registered', $this->ids() );
+
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'            => 'MT12345634',
+				'hmrc_client_id'              => 'id',
+				'hmrc_client_secret'          => 'secret',
+				'self_certification_required' => true,
+				'non_eu_registrations'        => array( 'GB' ),
+			)
+		);
+		$this->assertNotContains( 'non_eu_rates_not_registered', $this->ids() );
+	}
+
+	public function test_a_registered_country_without_a_rate_row_is_an_error_until_a_rate_exists(): void {
+		update_option(
+			Settings::OPTION,
+			array(
+				'store_vat_number'     => 'MT12345634',
+				'non_eu_registrations' => array( 'GB' ),
+			)
+		);
+		$issue = array_values( array_filter( ( new SetupCheck() )->issues( false ), static fn( $i ) => 'non_eu_rates_missing' === $i['id'] ) );
+		$this->assertCount( 1, $issue );
+		$this->assertSame( SetupCheck::ERROR, $issue[0]['severity'] );
+
+		$this->insert_rate( 'GB', 20 );
+		$this->assertNotContains( 'non_eu_rates_missing', $this->ids() );
 	}
 
 	public function test_taxes_disabled(): void {

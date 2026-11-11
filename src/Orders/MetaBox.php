@@ -70,7 +70,7 @@ class MetaBox {
 	public function handle_recheck(): void {
 		$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
 		check_admin_referer( self::ACTION . $order_id );
-		if ( ! current_user_can( 'edit_shop_orders' ) ) { // phpcs:ignore WordPress.WP.Capabilities.Unknown
+		if ( ! current_user_can( 'edit_shop_order', $order_id ) ) { // phpcs:ignore WordPress.WP.Capabilities.Unknown
 			wp_die( esc_html__( 'You are not allowed to do this.', 'vatright' ), '', array( 'response' => 403 ) );
 		}
 
@@ -270,6 +270,12 @@ class MetaBox {
 				return __( 'VAT was not charged, but the number turned out to be invalid. VAT may be due.', 'vatright' );
 			case 'evidence_conflict_self_certified':
 				return __( 'The location evidence conflicted and the customer self-certified their country.', 'vatright' );
+			case 'unknown_billing_country':
+				return __( 'The billing country is not a country the store knows, so the decision rests on the store country and VAT was charged.', 'vatright' );
+			case 'territory_by_postcode':
+				return __( 'The customer\'s postcode is in a part of the EU outside the VAT area, so no VAT was charged. Check that the postcode is right.', 'vatright' );
+			case 'evidence_conflict':
+				return __( 'The location evidence conflicted and the customer did not confirm their country.', 'vatright' );
 			case 'single_evidence':
 				return __( 'Only one piece of location evidence was available.', 'vatright' );
 			case 'name_mismatch':

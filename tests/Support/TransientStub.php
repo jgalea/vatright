@@ -23,3 +23,23 @@ if ( ! function_exists( 'get_transient' ) ) {
 		return true;
 	}
 }
+
+if ( ! function_exists( 'apply_filters' ) ) {
+	function apply_filters( $hook, $value ) {
+		return $GLOBALS['vatright_filter_overrides'][ $hook ] ?? $value;
+	}
+
+	function sanitize_text_field( $value ) {
+		return trim( (string) $value );
+	}
+
+	function wp_unslash( $value ) {
+		return $value;
+	}
+}
+
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+	define( 'MINUTE_IN_SECONDS', 60 );
+	define( 'HOUR_IN_SECONDS', 3600 );
+	define( 'DAY_IN_SECONDS', 86400 );
+}

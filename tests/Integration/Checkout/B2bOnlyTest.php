@@ -198,7 +198,7 @@ class B2bOnlyTest extends CheckoutTestCase {
 		$response = $this->block_checkout( 'DE', '10115' );
 
 		$this->assertSame( 400, $response->get_status() );
-		$this->assertSame( 'vatright_b2b_only_unverified', $response->get_data()['code'] );
+		$this->assertSame( 'vatright_b2b_only_throttled', $response->get_data()['code'] );
 		$this->no_orders();
 	}
 

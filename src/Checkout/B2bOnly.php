@@ -46,7 +46,7 @@ final class B2bOnly {
 			case ValidationResult::FORMAT_INVALID:
 				return 'invalid_vat_number';
 			default:
-				return 'b2b_only_unverified';
+				return 'throttled' === ( $record['validation']['detail'] ?? '' ) ? 'b2b_only_throttled' : 'b2b_only_unverified';
 		}
 	}
 
@@ -65,6 +65,9 @@ final class B2bOnly {
 			case 'invalid_vat_number':
 				$message = __( 'This VAT number is not valid, and this shop sells to businesses only. Correct the number to place your order.', 'vatright' );
 				break;
+			case 'b2b_only_throttled':
+				$message = __( 'This shop sells to businesses only, and too many VAT numbers are being checked right now. Try again in a few minutes.', 'vatright' );
+				break;
 			default:
 				$message = __( 'This shop sells to businesses only, and we could not check your VAT number with the tax authority just now. Check the number or try again in a few minutes.', 'vatright' );
 		}
@@ -72,7 +75,7 @@ final class B2bOnly {
 		 * Filters the message shown when business-only mode stops an order.
 		 *
 		 * @param string $message The default message.
-		 * @param string $code    b2b_only_required, invalid_vat_number, b2b_only_unverified or registry_unavailable.
+		 * @param string $code    b2b_only_required, invalid_vat_number, b2b_only_unverified, b2b_only_throttled or registry_unavailable.
 		 * @param string $country The customer's billing country code.
 		 */
 		return (string) apply_filters( 'vatright_b2b_only_message', $message, $code, $country );

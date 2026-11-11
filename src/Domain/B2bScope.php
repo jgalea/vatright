@@ -22,9 +22,10 @@ final class B2bScope {
 			case self::EVERYWHERE:
 				return true;
 			case self::EU:
-				return Territory::is_eu_member( $country );
+				return Territory::is_eu_member( Territory::vat_country( $country ) );
 			case self::COUNTRIES:
-				return '' !== $country && in_array( $country, array_map( 'strtoupper', $countries ), true );
+				$listed = array_map( 'strtoupper', $countries );
+				return '' !== $country && ( in_array( $country, $listed, true ) || in_array( Territory::vat_country( $country ), $listed, true ) );
 			default:
 				return false;
 		}

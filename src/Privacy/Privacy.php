@@ -220,7 +220,7 @@ class Privacy {
 				}
 			}
 
-			if ( Retention::is_retained( $order ) ) {
+			if ( 'shop_subscription' !== $order->get_type() && Retention::is_retained( $order ) ) {
 				$retained   = true;
 				$messages[] = sprintf(
 					/* translators: 1: order number, 2: date */
@@ -287,7 +287,7 @@ EU VAT rules require us to keep these records for %d years after the end of the 
 		/** @var WC_Order[] $orders */
 		$orders = wc_get_orders(
 			array(
-				'type'     => 'shop_order',
+				'type'     => Retention::ORDER_TYPES,
 				'status'   => 'any',
 				'customer' => $customers,
 				'orderby'  => 'ID',

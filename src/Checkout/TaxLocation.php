@@ -6,6 +6,7 @@ use Vatright\Domain\Decision;
 use Vatright\Domain\Line;
 use Vatright\Domain\LineDecision;
 use Vatright\Domain\Scheme;
+use Vatright\Settings;
 use WC_Tax;
 
 /**
@@ -33,8 +34,23 @@ final class TaxLocation {
 		Scheme::ROLE_EXEMPT,
 	);
 
-	public static function charges_line( LineDecision $line ): bool {
-		return ! in_array( $line->scheme(), self::UNTAXED_SCHEMES, true );
+	public static function charges_line( Decision $decision, LineDecision $line ): bool {
+		return ! in_array( $line->scheme(), self::UNTAXED_SCHEMES, true ) || self::is_registered_export( $decision, $line );
+	}
+
+	/**
+	 * A sale to a non-EU country the merchant is registered for VAT in is
+	 * taxed with the rates the merchant set up for it, unless the customer
+	 * gave a valid VAT number from that same country.
+	 */
+	private static function is_registered_export( Decision $decision, LineDecision $line ): bool {
+		if ( Scheme::EXPORT !== $line->scheme() || ! in_array( $line->tax_country(), Settings::get()->non_eu_registrations(), true ) ) {
+			return false;
+		}
+		$data = $decision->to_array();
+		return empty( $data['vat_number'] )
+			|| 'valid' !== ( $data['validation']['status'] ?? '' )
+			|| ( $data['vat_number']['country'] ?? '' ) !== $line->tax_country();
 	}
 
 	public static function charges( Decision $decision ): bool {
@@ -42,7 +58,7 @@ final class TaxLocation {
 			return false;
 		}
 		foreach ( $decision->lines() as $line ) {
-			if ( self::charges_line( $line ) ) {
+			if ( self::charges_line( $decision, $line ) ) {
 				return true;
 			}
 		}
@@ -68,7 +84,7 @@ final class TaxLocation {
 			}
 		);
 		foreach ( array() === $goods ? $decision->lines() : $goods as $line ) {
-			if ( self::charges_line( $line ) ) {
+			if ( self::charges_line( $decision, $line ) ) {
 				return $line;
 			}
 		}
@@ -90,7 +106,7 @@ final class TaxLocation {
 		if ( $decision->is_vat_exempt() || null === $line ) {
 			return array( array(), false );
 		}
-		list( $found, $missing ) = self::line_rates( $line, $tax_class, $location, $customer, $rates );
+		list( $found, $missing ) = self::line_rates( $decision, $line, $tax_class, $location, $customer, $rates );
 		$shipping                = array_filter(
 			$found,
 			static function ( $rate ): bool {
@@ -134,8 +150,8 @@ final class TaxLocation {
 	 * @param Address                 $customer
 	 * @return array{0: array<int|string,mixed>, 1: bool} The rates, and whether a rate was missing.
 	 */
-	public static function line_rates( LineDecision $line, string $tax_class, array $location, array $customer, array $rates ): array {
-		if ( ! self::charges_line( $line ) ) {
+	public static function line_rates( Decision $decision, LineDecision $line, string $tax_class, array $location, array $customer, array $rates ): array {
+		if ( ! self::charges_line( $decision, $line ) ) {
 			return array( array(), false );
 		}
 
@@ -149,6 +165,11 @@ final class TaxLocation {
 		}
 		if ( array() !== $found ) {
 			return array( $found, false );
+		}
+
+		if ( Scheme::EXPORT === $line->scheme() ) {
+			self::note_missing( $country, $tax_class );
+			return array( array(), true );
 		}
 
 		$base = WC_Tax::get_base_tax_rates( $tax_class );

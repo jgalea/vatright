@@ -86,6 +86,12 @@ final class ValidationResult {
 		return $this->detail;
 	}
 
+	public function with_detail( string $detail ): ValidationResult {
+		$copy         = clone $this;
+		$copy->detail = $detail;
+		return $copy;
+	}
+
 	public function with_from_cache( bool $from_cache ): ValidationResult {
 		$copy             = clone $this;
 		$copy->from_cache = $from_cache;

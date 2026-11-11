@@ -4,6 +4,7 @@ namespace Vatright\Privacy;
 
 use Automattic\WooCommerce\Utilities\OrderUtil;
 use DateTimeImmutable;
+use Vatright\Checkout\VatField;
 use Vatright\Ledger\Schema;
 use Vatright\Migration\LegacyData;
 use Vatright\Orders\CompatKeys;
@@ -17,6 +18,12 @@ class Retention {
 	const AS_GROUP      = 'vatright';
 	const BATCH         = 100;
 	const SCRUBBED_META = '_vatright_scrubbed';
+
+	const ORDER_TYPES = array( 'shop_order', 'shop_subscription' );
+
+	const LIVE_SUBSCRIPTION_STATUSES = array( 'active', 'on-hold', 'pending', 'pending-cancel' );
+
+	const BLOCK_FIELD_META = '_wc_other/' . VatField::FIELD_ID;
 
 	public function register(): void {
 		add_action( self::HOOK, array( $this, 'run_batch' ) );
@@ -36,7 +43,7 @@ class Retention {
 	public function run_batch( int $offset = 0 ): void {
 		$cutoff = new DateTimeImmutable( ( (int) wp_date( 'Y' ) - Settings::get()->retention_years() ) . '-01-01', wp_timezone() );
 		$args   = array(
-			'type'         => 'shop_order',
+			'type'         => self::ORDER_TYPES,
 			'status'       => 'any',
 			'date_created' => '<' . $cutoff->getTimestamp(),
 			'meta_query'   => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
@@ -115,11 +122,14 @@ class Retention {
 	}
 
 	public static function is_retained( WC_Order $order ): bool {
+		if ( 'shop_subscription' === $order->get_type() && in_array( $order->get_status(), self::LIVE_SUBSCRIPTION_STATUSES, true ) ) {
+			return true;
+		}
 		return self::retained_until( $order )->getTimestamp() > time();
 	}
 
 	public static function holds_personal_data( WC_Order $order ): bool {
-		if ( '' !== (string) $order->get_meta( DecisionStore::NUMBER_META ) || '' !== (string) $order->get_meta( LegacyData::IMPORTED_META ) ) {
+		if ( '' !== (string) $order->get_meta( DecisionStore::NUMBER_META ) || '' !== (string) $order->get_meta( LegacyData::IMPORTED_META ) || '' !== (string) $order->get_meta( self::BLOCK_FIELD_META ) ) {
 			return true;
 		}
 		if ( ! $order->meta_exists( self::SCRUBBED_META ) && null !== LegacyData::order( $order ) ) {
@@ -146,6 +156,7 @@ class Retention {
 
 		$order->delete_meta_data( DecisionStore::NUMBER_META );
 		$order->delete_meta_data( LegacyData::IMPORTED_META );
+		$order->delete_meta_data( self::BLOCK_FIELD_META );
 		CompatKeys::remove( $order );
 		foreach ( LegacyData::SOURCES as $definition ) {
 			foreach ( $definition['order_number'] as $key ) {

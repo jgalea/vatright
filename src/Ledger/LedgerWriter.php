@@ -4,10 +4,12 @@ namespace Vatright\Ledger;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Vatright\Checkout\InputGatherer;
 use Vatright\Checkout\TaxLocation;
 use Vatright\Domain\Decision;
 use Vatright\Domain\Line;
 use Vatright\Domain\Scheme;
+use Vatright\Orders\DecisionStore;
 use WC_Abstract_Order;
 use WC_Order;
 use WC_Order_Refund;
@@ -107,8 +109,7 @@ class LedgerWriter {
 	}
 
 	private function decision( WC_Order $order ): ?Decision {
-		$raw = json_decode( (string) $order->get_meta( self::DECISION_META ), true );
-		return is_array( $raw ) ? Decision::from_array( $raw ) : null;
+		return DecisionStore::get( $order );
 	}
 
 	private function timestamp( ?\WC_DateTime $date ): DateTimeImmutable {
@@ -133,9 +134,11 @@ class LedgerWriter {
 		/** @var array<\WC_Order_Item_Product|\WC_Order_Item_Shipping|\WC_Order_Item_Fee> $items */
 		$items = $source->get_items( array( 'line_item', 'shipping', 'fee' ) );
 		foreach ( $items as $item ) {
-			$original = $source === $order ? $item->get_id() : (int) $item->get_meta( '_refunded_item_id' );
+			$original = $source === $order ? $item : $order->get_item( (int) $item->get_meta( '_refunded_item_id' ), false );
+			$cart_key = $original ? (string) $original->get_meta( InputGatherer::LINE_KEY_META ) : '';
+			$line_key = '' !== $cart_key ? $cart_key : (string) ( $original ? $original->get_id() : (int) $item->get_meta( '_refunded_item_id' ) );
 			$follows  = $item instanceof \WC_Order_Item_Shipping ? TaxLocation::shipping_line( $decision ) : null;
-			$line     = $decision->line( (string) $original ) ?? $follows ?? ( $decision->lines()[0] ?? null );
+			$line     = $decision->line( $line_key ) ?? $follows ?? ( $decision->lines()[0] ?? null );
 			$taxes    = array_filter(
 				(array) ( $item->get_taxes()['total'] ?? array() ),
 				static function ( $amount ): bool {

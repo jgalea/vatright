@@ -11,8 +11,9 @@ class Csv {
 	 * @param mixed $value
 	 */
 	public static function cell( $value ): string {
-		$text = (string) $value;
-		if ( '' !== $text && ! is_numeric( $text ) && false !== strpos( "=+-@\t\r", $text[0] ) ) {
+		$text    = (string) $value;
+		$trimmed = ltrim( $text, " \u{A0}" );
+		if ( '' !== $trimmed && ! is_numeric( $trimmed ) && 1 === preg_match( '/^[=+\-@\t\r\x{FF1D}\x{FF0B}\x{FF0D}\x{FF20}]/u', $trimmed ) ) {
 			return "'" . $text;
 		}
 		return $text;
@@ -35,14 +36,20 @@ class Csv {
 	}
 
 	/**
-	 * @param string[]                 $header
-	 * @param array<int,array<mixed>>  $rows
+	 * @param string[]                   $header
+	 * @param iterable<int,array<mixed>> $rows
 	 */
-	public static function send( string $filename, array $header, array $rows ): void {
+	public static function send( string $filename, array $header, iterable $rows ): void {
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
 		header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $filename ) . '"' );
-		echo self::render( $header, $rows ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		/** @var resource $out */
+		$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+		fputcsv( $out, array_map( array( self::class, 'cell' ), $header ), ',', '"', '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		foreach ( $rows as $row ) {
+			fputcsv( $out, array_map( array( self::class, 'cell' ), $row ), ',', '"', '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		}
+		fclose( $out ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		exit;
 	}
 }

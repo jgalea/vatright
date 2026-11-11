@@ -51,7 +51,9 @@ final class Rules {
 		'prefix_mismatch',
 		'validation_pending',
 		'evidence_conflict_self_certified',
+		'evidence_conflict',
 		'single_evidence',
+		'territory_by_postcode',
 	);
 
 	/** @var callable(): string */
@@ -144,6 +146,9 @@ final class Rules {
 					Territory::vat_country( $country )
 				);
 			$result['evidence'] = $from_evidence;
+			if ( Rule::OUTSIDE_TERRITORY === $result['rule'] ) {
+				$result['flags'][] = 'territory_by_postcode';
+			}
 			return $result;
 		}
 
@@ -196,9 +201,14 @@ final class Rules {
 		}
 
 		if ( Line::DIGITAL === $line->supply_type() ) {
-			$country = $in->evidence()->resolve()['country'] ?? '';
+			$resolved = $in->evidence()->resolve();
+			$country  = $resolved['country'] ?? '';
 			if ( '' === $country ) {
 				$country = '' !== $in->billing_country() ? $in->billing_country() : $store;
+			}
+			$ip = $in->evidence()->to_array()['ip'];
+			if ( $resolved['pieces'] <= 1 && $this->ip_overrules( $in, $country ) ) {
+				$country = (string) $ip;
 			}
 			return array( $country, $this->postcode_for( $in, $country ), true );
 		}
@@ -207,6 +217,12 @@ final class Rules {
 			return array( $in->billing_country(), $in->billing_postcode(), false );
 		}
 		return array( $store, '', false );
+	}
+
+	private function ip_overrules( DecisionInput $in, string $country ): bool {
+		$evidence = $in->evidence()->to_array();
+		$ip       = $evidence['ip'];
+		return $in->evidence()->resolve()['conflict'] && null === $evidence['self_certified'] && null !== $ip && ! Territory::in_vat_area( $country, '' ) && Territory::in_vat_area( $ip, '' );
 	}
 
 	private function postcode_for( DecisionInput $in, string $country ): string {
@@ -434,7 +450,9 @@ final class Rules {
 			if ( null !== $evidence['self_certified'] ) {
 				$flags[] = 'evidence_conflict_self_certified';
 			} elseif ( $in->evidence()->resolve()['pieces'] <= 1 ) {
-				$flags[] = 'single_evidence';
+				$flags[] = $in->evidence()->resolve()['conflict'] ? 'evidence_conflict' : 'single_evidence';
+			} elseif ( $this->ip_overrules( $in, (string) $in->evidence()->resolve()['country'] ) ) {
+				$flags[] = 'evidence_conflict';
 			}
 		}
 

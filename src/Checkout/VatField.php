@@ -475,7 +475,7 @@ class VatField {
 				$customer->update_meta_data( '_wc_other/' . self::FIELD_ID, self::normalise( $posted[ self::CLASSIC_FIELD ] ) );
 			}
 		}
-		if ( array_key_exists( self::SELF_CERTIFY_MARKER, $posted ) && null !== CartSteering::session() ) {
+		if ( Settings::get()->self_certification() && array_key_exists( self::SELF_CERTIFY_MARKER, $posted ) && null !== CartSteering::session() ) {
 			CartSteering::session()->set( InputGatherer::SELF_CERTIFIED_SESSION, isset( $posted[ self::SELF_CERTIFY_FIELD ] ) ? $billing : null );
 		}
 	}
