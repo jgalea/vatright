@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.7
+Stable tag: 0.1.8
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -126,7 +126,7 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 
 == Changelog ==
 
-= 0.1.8 =
+= Unreleased =
 * New: "Registered for VAT in" setting for the United Kingdom, Norway and Switzerland. Once a country is ticked, sales to consumers there are charged the rates in your tax tables for that country, and a customer with a valid VAT number from it isn't charged. Stores that don't tick a country keep charging exactly what they charged before. The setup check reports a ticked country that has no tax rate row.
 * New: "No VAT-chargeable sales to" setting stops checkout when the cart holds a product VAT would be charged on in a country you pick; other products stay purchasable.
 * New: order evidence CSV on the EU VAT reports screen, with the countries, VAT number, registry result and consultation number for each order. It reads orders a page at a time and streams the file.
@@ -146,6 +146,9 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 * Fix: retention and the GDPR eraser also clear the VAT number the block checkout stores on the order and the one on WooCommerce Subscriptions.
 * Fix: an unreadable stored decision no longer breaks the Orders list.
 * Fix: the HMRC client secret is stored in its own option that isn't autoloaded; an existing secret moves there on upgrade.
+
+= 0.1.8 =
+* Fix: data retention now also cleans up orders on the classic post storage.
 
 = 0.1.7 =
 * New: import VAT numbers and settings from WooCommerce EU VAT Number, EU/UK VAT Validation Manager (WPFactory), EU/UK VAT Compliance (Simba) and Aelia EU VAT Assistant, under WooCommerce > Settings > Tax > VAT Right or with `wp vatright import`. A dry run shows the counts first; nothing is overwritten and the other plugin's data is left as it was.
