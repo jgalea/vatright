@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.7
+Stable tag: 0.1.8
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -125,6 +125,9 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 5. The EU VAT reports: OSS return and EC Sales List.
 
 == Changelog ==
+
+= 0.1.8 =
+* Fix: data retention now also cleans up orders on the classic post storage.
 
 = 0.1.7 =
 * New: import VAT numbers and settings from WooCommerce EU VAT Number, EU/UK VAT Validation Manager (WPFactory), EU/UK VAT Compliance (Simba) and Aelia EU VAT Assistant, under WooCommerce > Settings > Tax > VAT Right or with `wp vatright import`. A dry run shows the counts first; nothing is overwritten and the other plugin's data is left as it was.
