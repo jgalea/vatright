@@ -71,7 +71,7 @@ class InputGatherer {
 			}
 		}
 
-		$billing   = strtoupper( $customer->get_billing_country() );
+		$billing   = self::known_country( $customer->get_billing_country() );
 		$shipping  = $cart->needs_shipping() ? strtoupper( $customer->get_shipping_country() ) : '';
 		$session   = CartSteering::session();
 		$certified = null === $session ? null : $session->get( self::SELF_CERTIFIED_SESSION );
@@ -87,7 +87,7 @@ class InputGatherer {
 				'company'           => $customer->get_billing_company(),
 				'user_id'           => $customer->get_id(),
 				'ip'                => $this->ip_country( WC_Geolocation::get_ip_address() ),
-				'self_certified'    => is_string( $certified ) && '' !== $billing && strtoupper( $certified ) === $billing ? $billing : null,
+				'self_certified'    => Settings::get()->self_certification() && is_string( $certified ) && '' !== $billing && strtoupper( $certified ) === $billing ? $billing : null,
 				'lines'             => $lines,
 				'crossing'          => in_array( $trigger, self::NEW_SALE_TRIGGERS, true ) && $this->crosses( $net, get_woocommerce_currency(), $allow_network ),
 			),
@@ -121,7 +121,7 @@ class InputGatherer {
 			}
 		}
 
-		$billing  = strtoupper( $order->get_billing_country() );
+		$billing  = self::known_country( $order->get_billing_country() );
 		$shipping = $goods ? strtoupper( $order->get_shipping_country() ) : '';
 		$previous = DecisionStore::get( $order );
 		$evidence = null === $previous ? array() : (array) $previous->to_array()['evidence'];
@@ -143,13 +143,29 @@ class InputGatherer {
 				'company'           => '',
 				'user_id'           => $order->get_customer_id(),
 				'ip'                => array_key_exists( 'ip', $evidence ) ? $evidence['ip'] : $this->ip_country( $order->get_customer_ip_address() ),
-				'self_certified'    => isset( $evidence['self_certified'] ) && $evidence['self_certified'] === $billing ? $billing : null,
+				'self_certified'    => Settings::get()->self_certification() && isset( $evidence['self_certified'] ) && $evidence['self_certified'] === $billing ? $billing : null,
 				'lines'             => $lines,
 				'crossing'          => in_array( $trigger, self::NEW_SALE_TRIGGERS, true ) && $this->crosses( $net, $order->get_currency(), $allow_network ),
 			),
 			$trigger,
 			$allow_network
 		);
+	}
+
+	/**
+	 * A billing country the store doesn't know counts as no country, which
+	 * falls back to the store's and charges VAT.
+	 */
+	public static function known_country( string $code ): string {
+		$code = strtoupper( $code );
+		return isset( WC()->countries->get_countries()[ $code ] ) ? $code : '';
+	}
+
+	/**
+	 * @param string $code The country as entered.
+	 */
+	public static function is_unknown_country( string $code ): bool {
+		return '' !== trim( $code ) && '' === self::known_country( $code );
 	}
 
 	/**
@@ -169,6 +185,9 @@ class InputGatherer {
 		if ( null !== $number ) {
 			$name       = NameMismatch::lookup_name( $in['company'] );
 			$validation = 'checkout' === $trigger && $allow_network ? $this->validator->validate_for_visitor( $number, 'checkout', $name ) : $this->validator->validate( $number, $allow_network, false, $name );
+			if ( '' === $name && NameMismatch::requires_name( $trigger, $validation ) ) {
+				$validation = $validation->with_detail( NameMismatch::MISSING_DETAIL );
+			}
 		}
 		// A throttled lookup is something a visitor can bring about, so the merchant's outage policy does not apply: an exemption or a refusal would be theirs to trigger.
 		$outage = null !== $validation && 'throttled' === $validation->detail() ? 'charge' : $settings->outage_policy();

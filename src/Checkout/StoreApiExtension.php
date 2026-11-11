@@ -98,8 +98,8 @@ class StoreApiExtension {
 		if ( ! $customer instanceof WC_Customer ) { // @phpstan-ignore instanceof.alwaysTrue
 			return;
 		}
-		if ( isset( $data['country'] ) ) {
-			$customer->set_billing_country( sanitize_text_field( (string) $data['country'] ) );
+		if ( isset( $data['country'] ) && array_key_exists( strtoupper( sanitize_text_field( (string) $data['country'] ) ), WC()->countries->get_allowed_countries() ) ) {
+			$customer->set_billing_country( strtoupper( sanitize_text_field( (string) $data['country'] ) ) );
 			$customer->set_billing_postcode( sanitize_text_field( (string) ( $data['postcode'] ?? '' ) ) );
 		}
 		$billing = strtoupper( $customer->get_billing_country() );
@@ -107,7 +107,7 @@ class StoreApiExtension {
 		if ( array_key_exists( 'vat_number', $data ) ) {
 			$this->field->set_number( $customer, sanitize_text_field( (string) $data['vat_number'] ), $billing, $customer->get_billing_company() );
 		}
-		if ( array_key_exists( 'self_certify', $data ) && null !== CartSteering::session() ) {
+		if ( Settings::get()->self_certification() && array_key_exists( 'self_certify', $data ) && null !== CartSteering::session() ) {
 			CartSteering::session()->set( InputGatherer::SELF_CERTIFIED_SESSION, filter_var( $data['self_certify'], FILTER_VALIDATE_BOOLEAN ) ? $billing : null );
 		}
 	}
@@ -190,8 +190,9 @@ class StoreApiExtension {
 		if ( null !== $code ) {
 			return array( 'invalid_vat_number' === $code ? 'invalid' : 'pending', CheckoutDecider::message( $code ) );
 		}
-		if ( NameMismatch::refuses( $decision ) ) {
-			return array( 'invalid', CheckoutDecider::message( NameMismatch::CODE ) );
+		$name_code = NameMismatch::refusal( $decision );
+		if ( null !== $name_code ) {
+			return array( 'invalid', CheckoutDecider::message( $name_code ) );
 		}
 		if ( Rule::ROLE_EXEMPT === $decision->rule() ) {
 			return array( 'verified', __( 'No VAT is charged on this order.', 'vatright' ) );

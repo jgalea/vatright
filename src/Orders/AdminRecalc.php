@@ -59,6 +59,10 @@ class AdminRecalc {
 			return;
 		}
 
+		if ( InputGatherer::is_unknown_country( $order->get_billing_country() ) ) {
+			$decision = $decision->with_flag( CartSteering::UNKNOWN_COUNTRY_FLAG );
+		}
+
 		$previous = DecisionStore::get( $order );
 		if ( null === $previous || $decision->differs_in_tax_from( $previous ) || self::number_of( $decision ) !== self::number_of( $previous ) ) {
 			DecisionStore::apply( $order, $decision, 'admin', get_current_user_id() );

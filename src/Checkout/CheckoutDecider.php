@@ -65,17 +65,35 @@ class CheckoutDecider {
 		return null !== $decision && $settings->self_certification() && $settings->self_certification_required() && $decision->needs_location_confirmation();
 	}
 
+	/**
+	 * Whether the cart holds a line that VAT would be charged on in a
+	 * territory the merchant doesn't sell VAT-chargeable products into.
+	 */
+	public static function sells_into_blocked_territory( ?Decision $decision ): bool {
+		$blocked = Settings::get()->blocked_vat_territories();
+		if ( null === $decision || array() === $blocked || $decision->is_vat_exempt() ) {
+			return false;
+		}
+		foreach ( $decision->lines() as $line ) {
+			if ( TaxLocation::charges_line( $decision, $line ) && in_array( $line->tax_country(), $blocked, true ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static function error_code( ?Decision $decision ): ?string {
 		$blocking = null === $decision ? null : $decision->blocking_error();
 		return $blocking
-			?? ( NameMismatch::refuses( $decision ) ? NameMismatch::CODE : null )
+			?? NameMismatch::refusal( $decision )
 			?? B2bOnly::error( $decision, B2bOnly::billing_country() )
+			?? ( self::sells_into_blocked_territory( $decision ) ? 'territory_blocked' : null )
 			?? ( self::requires_confirmation( $decision ) ? 'self_certification_required' : null );
 	}
 
 	public static function message( string $code, ?string $country = null ): string {
 		$country = $country ?? B2bOnly::billing_country();
-		$b2b     = in_array( $code, array( 'b2b_only_required', 'b2b_only_unverified' ), true )
+		$b2b     = in_array( $code, array( 'b2b_only_required', 'b2b_only_unverified', 'b2b_only_throttled' ), true )
 			|| ( in_array( $code, array( 'invalid_vat_number', 'registry_unavailable' ), true ) && B2bOnly::applies( $country ) );
 		if ( $b2b ) {
 			return B2bOnly::message( $code, $country );
@@ -90,6 +108,13 @@ class CheckoutDecider {
 					return __( 'The company name does not match the name registered for this VAT number. Enter the company name exactly as it is registered for that number.', 'vatright' );
 				}
 				return __( 'The company name does not match the name registered for this VAT number. Enter the company name exactly as it is registered for that number, or leave the VAT number empty to pay with VAT.', 'vatright' );
+			case NameMismatch::MISSING_CODE:
+				if ( B2bOnly::applies( $country ) ) {
+					return __( 'Enter your company name, exactly as it is registered for this VAT number.', 'vatright' );
+				}
+				return __( 'Enter your company name, exactly as it is registered for this VAT number, or leave the VAT number empty to pay with VAT.', 'vatright' );
+			case 'territory_blocked':
+				return __( 'Some products in your cart can\'t be sold with VAT to your country. Remove them to continue.', 'vatright' );
 			case 'self_certification_required':
 				return __( 'Your billing country and your location do not match. Confirm the country you are located in to continue.', 'vatright' );
 			default:

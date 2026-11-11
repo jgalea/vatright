@@ -1054,6 +1054,101 @@ class RulesTest extends TestCase {
 		);
 	}
 
+	public function test_eu_ip_against_a_non_eu_billing_country_is_charged_and_flagged_as_a_conflict(): void {
+		$d = $this->decide(
+			array(
+				'exceeded'        => true,
+				'billing_country' => 'US',
+				'ip'              => 'DE',
+			)
+		);
+		$this->assertSame( 'DE', $d->tax_country(), 'two contradicting pieces must not zero-rate a digital sale' );
+		$this->assertCharged( $d );
+		$this->assertSame( array( 'evidence_conflict' ), $d->flags() );
+		$this->assertTrue( $d->needs_location_confirmation() );
+	}
+
+	public function test_two_agreeing_non_eu_pieces_are_kept_against_an_eu_ip_and_flagged(): void {
+		$d = $this->decide(
+			array(
+				'exceeded'          => true,
+				'billing_country'   => 'US',
+				'billing_postcode'  => '10001',
+				'shipping_country'  => 'US',
+				'shipping_postcode' => '10001',
+				'ip'                => 'DE',
+			)
+		);
+		$this->assertSame( 'US', $d->tax_country() );
+		$this->assertSame( Scheme::EXPORT, $d->scheme() );
+		$this->assertSame( array( 'evidence_conflict' ), $d->flags() );
+	}
+
+	public function test_self_certifying_a_non_eu_country_still_zero_rates_the_sale(): void {
+		$d = $this->decide(
+			array(
+				'billing_country' => 'US',
+				'ip'              => 'DE',
+				'self_certified'  => 'US',
+			)
+		);
+		$this->assertSame( Scheme::EXPORT, $d->scheme() );
+		$this->assertSame( array( 'evidence_conflict_self_certified' ), $d->flags() );
+	}
+
+	public function test_conflicting_eu_countries_carry_the_conflict_flag_not_single_evidence(): void {
+		$d = $this->decide( array( 'ip' => 'AT' ) );
+		$this->assertSame( array( 'evidence_conflict' ), $d->flags() );
+	}
+
+	public function test_monaco_billing_with_a_french_ip_is_not_a_conflict(): void {
+		$d = $this->decide(
+			array(
+				'billing_country' => 'MC',
+				'ip'              => 'FR',
+			)
+		);
+		$this->assertFalse( $d->to_array()['evidence']['conflict'] );
+		$this->assertFalse( $d->needs_location_confirmation() );
+	}
+
+	public function test_a_reverse_charged_digital_line_needs_no_location_confirmation(): void {
+		$d = $this->decide(
+			array(
+				'vat'              => 'DE114103379',
+				'status'           => ValidationResult::VALID,
+				'ip'               => 'FR',
+				'shipping_country' => 'MT',
+				'lines'            => array( $this->goods(), $this->digital() ),
+			)
+		);
+		$this->assertFalse( $d->needs_location_confirmation() );
+	}
+
+	public function test_a_postcode_outside_the_vat_area_is_flagged_for_review(): void {
+		$d = $this->decide(
+			array(
+				'billing_country'  => 'ES',
+				'billing_postcode' => '35001',
+				'ip'               => 'ES',
+				'lines'            => array( $this->goods() ),
+			)
+		);
+		$this->assertSame( Rule::OUTSIDE_TERRITORY, $d->rule() );
+		$this->assertContains( 'territory_by_postcode', $d->flags() );
+	}
+
+	public function test_a_mainland_postcode_is_not_flagged_as_a_territory_exclusion(): void {
+		$d = $this->decide(
+			array(
+				'billing_country'  => 'ES',
+				'billing_postcode' => '28001',
+				'ip'               => 'ES',
+			)
+		);
+		$this->assertNotContains( 'territory_by_postcode', $d->flags() );
+	}
+
 	public function test_single_piece_of_evidence_is_flagged(): void {
 		$d = $this->decide( array( 'ip' => null ) );
 		$this->assertSame( array( 'single_evidence' ), $d->flags(), 'Reg. Art. 24b(d) asks for two items of evidence' );

@@ -22,6 +22,8 @@ class CartSteering {
 
 	const SESSION_KEY = 'vatright_decision';
 
+	const UNKNOWN_COUNTRY_FLAG = 'unknown_billing_country';
+
 	/** @var InputGatherer */
 	private $gatherer;
 
@@ -152,6 +154,9 @@ class CartSteering {
 			$decision = null;
 		}
 
+		if ( null !== $decision && InputGatherer::is_unknown_country( $customer->get_billing_country() ) ) {
+			$decision = $decision->with_flag( self::UNKNOWN_COUNTRY_FLAG );
+		}
 		$customer->set_is_vat_exempt( null !== $decision && $decision->is_vat_exempt() );
 		$this->store( $decision );
 		return $decision;
@@ -203,7 +208,7 @@ class CartSteering {
 			'postcode' => (string) $raw[2],
 			'city'     => (string) $raw[3],
 		);
-		list( $found, $missing ) = TaxLocation::line_rates( $line, (string) $item->tax_class, $location, $this->customer_address ?? $location, (array) $rates );
+		list( $found, $missing ) = TaxLocation::line_rates( $decision, $line, (string) $item->tax_class, $location, $this->customer_address ?? $location, (array) $rates );
 		if ( $missing ) {
 			$this->flag_missing();
 		}

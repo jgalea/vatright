@@ -2,6 +2,7 @@
 
 namespace Vatright\Tests\Integration\Ledger;
 
+use Vatright\Checkout\InputGatherer;
 use Vatright\Domain\Decision;
 use Vatright\Domain\LineDecision;
 use Vatright\Domain\Rule;
@@ -155,8 +156,11 @@ abstract class LedgerTestCase extends IntegrationTestCase {
 	protected function seed_decision( WC_Order $order, string $scheme = Scheme::OSS_DESTINATION, string $rule = Rule::B2C_DESTINATION, array $lines = array(), ?string $vat_number = null ): Decision {
 		$line_decisions = array();
 		foreach ( $order->get_items() as $item ) {
-			$spec             = $lines[ $item->get_name() ] ?? array( 'goods', 'DE', $scheme );
-			$line_decisions[] = new LineDecision( (string) $item->get_id(), $spec[0], $spec[1], $spec[1], $spec[2] );
+			$spec     = $lines[ $item->get_name() ] ?? array( 'goods', 'DE', $scheme );
+			$cart_key = 'cartkey' . $item->get_id();
+			$item->update_meta_data( InputGatherer::LINE_KEY_META, $cart_key );
+			$item->save();
+			$line_decisions[] = new LineDecision( $cart_key, $spec[0], $spec[1], $spec[1], $spec[2] );
 		}
 
 		$decision = new Decision(

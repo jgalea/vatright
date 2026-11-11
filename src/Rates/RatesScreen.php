@@ -45,6 +45,7 @@ class RatesScreen {
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( self::NONCE ); ?>
 			<input type="hidden" name="action" value="vatright_rates_apply" />
+			<div style="overflow-x:auto">
 			<table class="widefat striped">
 				<thead>
 					<tr>
@@ -73,6 +74,7 @@ class RatesScreen {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
+			</div>
 			<p>
 				<label>
 					<input type="checkbox" name="vatright_overwrite_edited" value="1" />

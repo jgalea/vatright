@@ -126,6 +126,27 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 
 == Changelog ==
 
+= Unreleased =
+* New: "Registered for VAT in" setting for the United Kingdom, Norway and Switzerland. Once a country is ticked, sales to consumers there are charged the rates in your tax tables for that country, and a customer with a valid VAT number from it isn't charged. Stores that don't tick a country keep charging exactly what they charged before. The setup check reports a ticked country that has no tax rate row.
+* New: "No VAT-chargeable sales to" setting stops checkout when the cart holds a product VAT would be charged on in a country you pick; other products stay purchasable.
+* New: order evidence CSV on the EU VAT reports screen, with the countries, VAT number, registry result and consultation number for each order. It reads orders a page at a time and streams the file.
+* New: "Re-check VAT numbers" bulk action on the orders list. It runs in small batches and sends its emails once the batch is done.
+* New: a digital sale whose location evidence contradicts itself is charged VAT and carries an "evidence conflict" flag in the EU VAT box. B2B lines and countries that share a VAT territory don't trigger it.
+* Fix: the ledger, and so the OSS return and EC Sales List, now match each order line to its own VAT treatment on orders that mix goods and digital or B2B lines.
+* Fix: a digital sale where the IP address points to an EU country and the billing country is outside the EU is charged VAT and flagged until the customer confirms their country.
+* Fix: a posted country confirmation is only accepted when Self-certification is switched on.
+* Fix: a VAT number only exempts a sale when it comes from the country the line is taxed in.
+* Fix: the company name check also applies when the company field is empty, and a single generic word such as "Trading" no longer counts as a match.
+* Fix: the lookup limit is an absolute cap with a share set aside for first lookups. Each hour a client's first lookups draw on that share, rationed per IPv6 /48 and IPv4 /24 so one network can't use it up. In business-only mode a shopper whose lookup was held back is told to try again in a few minutes. Filters: `vatright_global_lookup_limit`, `vatright_global_free_lookup_limit`, `vatright_free_lookup_window` and `vatright_network_free_lookup_limit`.
+* Fix: a billing country the store doesn't know is treated as no country and flagged, and a postcode outside the VAT area flags the order for review. Business-only mode counts Monaco as France.
+* Fix: the block checkout only takes billing countries the store sells to.
+* Fix: VAT-exempt roles leave out the role new sign-ups get while WordPress, WooCommerce or network registration is open, including when it was saved earlier.
+* Fix: the order re-check checks the user's capability for that order.
+* Fix: CSV exports neutralise a leading space and full-width formula characters.
+* Fix: retention and the GDPR eraser also clear the VAT number the block checkout stores on the order and the one on WooCommerce Subscriptions.
+* Fix: an unreadable stored decision no longer breaks the Orders list.
+* Fix: the HMRC client secret is stored in its own option that isn't autoloaded; an existing secret moves there on upgrade.
+
 = 0.1.8 =
 * Fix: data retention now also cleans up orders on the classic post storage.
 

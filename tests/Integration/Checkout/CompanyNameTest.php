@@ -135,15 +135,19 @@ class CompanyNameTest extends CheckoutTestCase {
 		$this->assertSame( 'success', $this->classic_checkout( 'ES', '28001', array( 'billing_company' => self::REGISTERED ) )['result'] );
 	}
 
-	public function test_without_a_company_name_nothing_is_sent_and_nothing_is_refused(): void {
+	public function test_without_a_company_name_no_name_is_sent_and_the_order_is_refused(): void {
 		$this->refuse();
 		$this->cart_es();
-		$this->order_from( $this->block_checkout( 'ES', '28001', $this->block_extra( '' ) ) );
+		$response = $this->block_checkout( 'ES', '28001', $this->block_extra( '' ) );
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'vatright_name_missing', $response->get_data()['code'] );
 
 		$this->cart_es();
-		$this->assertSame( 'success', $this->classic_checkout( 'ES', '28001' )['result'] );
+		$reply = $this->classic_checkout( 'ES', '28001' );
+		$this->assertSame( 'failure', $reply['result'] );
+		$this->assertStringContainsString( 'Enter your company name', (string) $reply['messages'] );
+		$this->no_orders();
 
-		$this->assertNotSame( array(), $this->bodies );
 		foreach ( $this->bodies as $body ) {
 			$this->assertStringNotContainsString( 'traderName', $body );
 		}

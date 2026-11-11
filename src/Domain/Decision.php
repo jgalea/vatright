@@ -167,7 +167,7 @@ final class Decision {
 			return false;
 		}
 		foreach ( $this->lines as $line ) {
-			if ( Line::DIGITAL === $line->supply_type() ) {
+			if ( Line::DIGITAL === $line->supply_type() && in_array( $line->scheme(), array( Scheme::OSS_DESTINATION, Scheme::ORIGIN, Scheme::DOMESTIC ), true ) ) {
 				return true;
 			}
 		}

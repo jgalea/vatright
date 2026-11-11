@@ -167,4 +167,37 @@ class SelfCertificationTest extends CheckoutTestCase {
 		$this->settings( array() );
 		$this->assertFalse( StoreApiExtension::status( $this->calculate() )['self_certification_required'] );
 	}
+
+	public function test_a_posted_confirmation_is_ignored_while_the_setting_is_off(): void {
+		$this->settings( array( 'self_certification' => false ) );
+		$this->visitor_in( 'DE' );
+		$this->add_to_cart( $this->product( 'digital' ) );
+		$this->store_api( 'POST', 'cart/update-customer', array( 'billing_address' => $this->address( 'CH', '8001' ) ) );
+
+		$this->store_api(
+			'POST',
+			'cart/extensions',
+			array(
+				'namespace' => 'vatright',
+				'data'      => array( 'self_certify' => true ),
+			)
+		);
+
+		$this->assertNull( CartSteering::session()->get( InputGatherer::SELF_CERTIFIED_SESSION ) );
+		$order = $this->order_from( $this->block_checkout( 'CH', '8001' ) );
+		$this->assertNull( $this->stored_decision( $order )->to_array()['evidence']['self_certified'] );
+		$this->assertGreaterThan( 0.0, (float) $order->get_total_tax() );
+	}
+
+	public function test_a_session_confirmation_is_ignored_while_the_setting_is_off(): void {
+		$this->settings( array( 'self_certification' => false ) );
+		$this->visitor_in( 'DE' );
+		$this->add_to_cart( $this->product( 'digital' ) );
+		WC()->session->set( InputGatherer::SELF_CERTIFIED_SESSION, 'CH' );
+
+		$order = $this->order_from( $this->block_checkout( 'CH', '8001' ) );
+
+		$this->assertNull( $this->stored_decision( $order )->to_array()['evidence']['self_certified'] );
+		$this->assertGreaterThan( 0.0, (float) $order->get_total_tax() );
+	}
 }

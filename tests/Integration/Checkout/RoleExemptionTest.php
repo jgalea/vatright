@@ -65,6 +65,51 @@ class RoleExemptionTest extends CheckoutTestCase {
 		$this->assertSame( 19.8, round( (float) WC()->cart->get_total_tax(), 2 ), '18% on the goods and the shipping' );
 	}
 
+	public function test_a_stored_default_role_is_charged_while_sign_up_is_open() {
+		update_option( 'default_role', 'subscriber' );
+		update_option( 'users_can_register', 1 );
+		$this->settings( array( 'exempt_roles' => array( 'subscriber' ) ) );
+		$this->sign_in( array( 'subscriber' ) );
+		$this->add_to_cart( $this->product( 'goods' ) );
+
+		$this->assertFalse( $this->calculate()->is_vat_exempt() );
+	}
+
+	public function test_customer_is_charged_while_woocommerce_checkout_registration_is_on() {
+		update_option( 'woocommerce_enable_signup_and_login_from_checkout', 'yes' );
+		$this->settings( array( 'exempt_roles' => array( 'customer' ) ) );
+		$this->sign_in( array( 'customer' ) );
+		$this->add_to_cart( $this->product( 'goods' ) );
+
+		$this->assertFalse( $this->calculate()->is_vat_exempt() );
+	}
+
+	public function test_customer_stays_exempt_when_no_registration_is_open() {
+		update_option( 'woocommerce_enable_signup_and_login_from_checkout', 'no' );
+		update_option( 'woocommerce_enable_myaccount_registration', 'no' );
+		$this->settings( array( 'exempt_roles' => array( 'customer' ) ) );
+		$this->sign_in( array( 'customer' ) );
+		$this->add_to_cart( $this->product( 'goods' ) );
+
+		$this->assertTrue( $this->calculate()->is_vat_exempt() );
+	}
+
+	public function test_the_role_a_filter_gives_new_customers_is_charged() {
+		update_option( 'woocommerce_enable_myaccount_registration', 'yes' );
+		add_filter(
+			'woocommerce_new_customer_data',
+			static function ( $data ) {
+				$data['role'] = 'wholesale_customer';
+				return $data;
+			}
+		);
+		$this->settings( array( 'exempt_roles' => array( 'wholesale_customer' ) ) );
+		$this->sign_in( array( 'wholesale_customer' ) );
+		$this->add_to_cart( $this->product( 'goods' ) );
+
+		$this->assertFalse( $this->calculate()->is_vat_exempt() );
+	}
+
 	public function test_default_settings_exempt_nobody() {
 		$this->sign_in( array( 'wholesale_customer' ) );
 		$this->add_to_cart( $this->product( 'goods' ) );

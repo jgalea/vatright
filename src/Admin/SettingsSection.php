@@ -204,7 +204,7 @@ class SettingsSection {
 				array(
 					'options'  => WC()->countries->get_countries(),
 					'class'    => 'wc-enhanced-select',
-					'css'      => 'min-width: 350px;',
+					'css'      => 'min-width: 300px;',
 					'desc_tip' => __( 'Used when the setting above is "chosen countries". The country is the customer\'s billing country.', 'vatright' ),
 				)
 			),
@@ -222,7 +222,7 @@ class SettingsSection {
 				)
 			),
 			$this->checkbox( 'self_certification', __( 'Self-certification', 'vatright' ), __( 'Ask digital customers to confirm their country when the evidence conflicts', 'vatright' ), $s->self_certification() ),
-			$this->checkbox( 'self_certification_required', __( 'Require confirmation', 'vatright' ), __( 'Block checkout until the customer confirms their country (needs Self-certification)', 'vatright' ), $s->self_certification_required() ),
+			$this->checkbox( 'self_certification_required', __( 'Require confirmation', 'vatright' ), __( 'Block checkout until the customer confirms their country (needs Self-certification). When off, a digital sale with conflicting location evidence is charged for the billing country and flagged.', 'vatright' ), $s->self_certification_required() ),
 			$this->checkbox( 'allow_domestic_exemption', __( 'Domestic B2B', 'vatright' ), __( 'Allow VAT exemption for valid numbers from the store country', 'vatright' ), $s->allow_domestic_exemption() ),
 			$this->field(
 				'refuse_name_mismatch',
@@ -231,7 +231,7 @@ class SettingsSection {
 				$s->refuse_name_mismatch() ? 'yes' : 'no',
 				array(
 					'desc'     => __( 'Refuse the order when the company name doesn\'t match the registry', 'vatright' ),
-					'desc_tip' => __( 'The company name from the billing address is sent to VIES with the VAT number, and the customer is asked to use the name registered for that number. Spain\'s registry judges the name itself; for other countries the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms such as GmbH or S.A. When the registry returns no name, or no company name is entered, the order is accepted.', 'vatright' ),
+					'desc_tip' => __( 'The company name from the billing address is sent to VIES with the VAT number, and the customer is asked to use the name registered for that number. Spain\'s registry judges the name itself; for other countries the name is compared with the one VIES returns, ignoring case, accents, punctuation and legal forms such as GmbH or S.A. The company name is required while this is on. When the registry returns no name, the order is accepted.', 'vatright' ),
 				)
 			),
 			$this->checkbox( 'registration_vat_field', __( 'Registration form', 'vatright' ), __( 'Add an optional VAT number field to the My Account registration form', 'vatright' ), $s->registration_vat_field() ),
@@ -260,6 +260,34 @@ class SettingsSection {
 					),
 				)
 			),
+			$this->field(
+				'blocked_vat_territories',
+				'multiselect',
+				__( 'No VAT-chargeable sales to', 'vatright' ),
+				$s->blocked_vat_territories(),
+				array(
+					'options'  => WC()->countries->get_countries(),
+					'class'    => 'wc-enhanced-select',
+					'css'      => 'min-width: 350px;',
+					'desc_tip' => __( 'For countries you are not registered for VAT in. Checkout stops when the cart holds a product VAT would be charged on there, so customers can still buy products that carry no VAT, such as business purchases with a valid VAT number.', 'vatright' ),
+				)
+			),
+			$this->field(
+				'non_eu_registrations',
+				'multiselect',
+				__( 'Registered for VAT in', 'vatright' ),
+				$s->non_eu_registrations(),
+				array(
+					'options' => array(
+						'GB' => __( 'United Kingdom', 'vatright' ),
+						'NO' => __( 'Norway', 'vatright' ),
+						'CH' => __( 'Switzerland', 'vatright' ),
+					),
+					'class'   => 'wc-enhanced-select',
+					'css'     => 'min-width: 300px;',
+					'desc'    => __( 'Sales to consumers in these countries are charged the rates in your tax tables for that country. A customer with a valid VAT number from the country is not charged.', 'vatright' ),
+				)
+			),
 			$this->checkbox( 'fixed_prices', __( 'Fixed prices', 'vatright' ), __( 'Keep gross prices the same in every EU country (prices entered with tax)', 'vatright' ), $s->fixed_prices() ),
 			$this->field(
 				'exempt_roles',
@@ -270,7 +298,7 @@ class SettingsSection {
 					'options' => self::role_options(),
 					'class'   => 'wc-enhanced-select',
 					'css'     => 'min-width: 300px;',
-					'desc'    => __( 'Orders from customers with these roles are VAT-exempt. A user role is not a basis for VAT exemption under EU VAT law on its own, so you are responsible for making sure each exemption is correct, for example that these accounts are checked VAT-registered businesses. The role is recorded on every order it exempts. Leave empty to exempt nobody.', 'vatright' ),
+					'desc'    => __( 'Orders from customers with these roles are VAT-exempt. A user role is not a basis for VAT exemption under EU VAT law on its own, so you are responsible for making sure each exemption is correct, for example that these accounts are checked VAT-registered businesses. The role is recorded on every order it exempts. Leave empty to exempt nobody. While registration is open, the role new sign-ups get, including new WooCommerce customers, can\'t be used here.', 'vatright' ),
 				)
 			),
 			array(
@@ -365,18 +393,27 @@ class SettingsSection {
 		if ( 'b2b_only' === $key ) {
 			return in_array( $value, B2bScope::MODES, true ) ? $value : B2bScope::OFF;
 		}
-		if ( 'b2b_only_countries' === $key ) {
+		if ( 'b2b_only_countries' === $key || 'blocked_vat_territories' === $key ) {
 			return $this->sanitize_countries( $value );
 		}
+		if ( 'non_eu_registrations' === $key ) {
+			return array_values( array_intersect( Settings::NON_EU_REGISTRATIONS, array_map( 'strtoupper', array_map( 'strval', (array) $value ) ) ) );
+		}
 		if ( 'exempt_roles' === $key ) {
-			return array_values(
-				array_filter(
-					(array) $value,
-					static function ( $role ): bool {
-						return is_string( $role ) && wp_roles()->is_role( $role );
-					}
-				)
-			);
+			$signup = Settings::self_registered_roles();
+			$roles  = array();
+			foreach ( (array) $value as $role ) {
+				if ( ! is_string( $role ) || ! wp_roles()->is_role( $role ) ) {
+					continue;
+				}
+				if ( in_array( $role, $signup, true ) ) {
+					/* translators: %s: role name. */
+					WC_Admin_Settings::add_error( sprintf( __( 'The "%s" role is what new sign-ups get, so it can\'t be VAT-exempt: anyone could register and skip VAT. Give your business customers their own role instead.', 'vatright' ), translate_user_role( wp_roles()->get_names()[ $role ] ?? $role ) ) );
+					continue;
+				}
+				$roles[] = $role;
+			}
+			return $roles;
 		}
 		if ( 'store_vat_number' === $key ) {
 			return $this->sanitize_store_vat_number( (string) $value );
@@ -566,18 +603,17 @@ class SettingsSection {
 
 	/**
 	 * The form never carries the saved secret, so an empty field keeps it.
-	 * Clearing the client ID removes both.
+	 * Clearing the client ID removes both. The secret lives in its own option
+	 * that isn't autoloaded, and the settings array keeps an empty value.
 	 */
 	private function sanitize_hmrc_secret( string $value ): string {
 		$client_id              = $this->posted_client_id;
 		$this->posted_client_id = null;
-		if ( '' !== $value ) {
-			return $value;
+		if ( '' === $value ) {
+			$value = null !== $client_id && '' === trim( $client_id ) ? '' : Settings::get()->hmrc_client_secret();
 		}
-		if ( null !== $client_id && '' === trim( $client_id ) ) {
-			return '';
-		}
-		return Settings::get()->hmrc_client_secret();
+		update_option( Settings::SECRET_OPTION, $value, false );
+		return '';
 	}
 
 	private function registry_message( ValidationResult $result ): string {

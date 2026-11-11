@@ -14,9 +14,27 @@ final class DecisionStore {
 
 	const NUMBER_META = '_vatright_number';
 
+	const REQUIRED_KEYS = array( 'id', 'at', 'trigger', 'store', 'customer', 'vat_number', 'validation', 'evidence', 'policy', 'lines', 'scheme', 'rule', 'vat_exempt', 'flags', 'legal_text', 'blocking_error' );
+
+	/**
+	 * A stored record from another schema version, a partial import or a
+	 * hand edit reads as no decision rather than breaking the screen that
+	 * shows it.
+	 */
 	public static function get( WC_Order $order ): ?Decision {
 		$data = json_decode( (string) $order->get_meta( self::META ), true );
-		return is_array( $data ) ? Decision::from_array( $data ) : null;
+		if ( ! is_array( $data ) ) {
+			return null;
+		}
+		try {
+			if ( array() !== array_diff( self::REQUIRED_KEYS, array_keys( $data ) ) ) {
+				throw new \UnexpectedValueException( 'missing keys' );
+			}
+			return Decision::from_array( $data );
+		} catch ( \Throwable $e ) {
+			wc_get_logger()->warning( 'Ignored an unreadable VAT decision on order ' . $order->get_id() . ': ' . $e->getMessage(), array( 'source' => 'vatright' ) );
+			return null;
+		}
 	}
 
 	/**

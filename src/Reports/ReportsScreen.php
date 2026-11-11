@@ -30,6 +30,7 @@ class ReportsScreen {
 		add_action( 'admin_post_vatright_export_oss', array( $this, 'export_oss' ) );
 		add_action( 'admin_post_vatright_export_esl', array( $this, 'export_esl' ) );
 		add_action( 'admin_post_vatright_export_intrastat', array( $this, 'export_intrastat' ) );
+		add_action( 'admin_post_vatright_export_orders', array( $this, 'export_orders' ) );
 	}
 
 	public function add_menu(): void {
@@ -87,6 +88,7 @@ class ReportsScreen {
 					?>
 				</p></div>
 			<?php else : ?>
+				<div style="overflow-x:auto">
 				<table class="widefat striped">
 					<thead>
 						<tr>
@@ -110,6 +112,7 @@ class ReportsScreen {
 						<?php endif; ?>
 					</tbody>
 				</table>
+				</div>
 				<?php $this->export_form( 'vatright_export_esl', $period, __( 'Download EC Sales List CSV', 'vatright' ) ); ?>
 			<?php endif; ?>
 
@@ -132,6 +135,10 @@ class ReportsScreen {
 				<?php $this->intrastat_table( $intrastat ); ?>
 				<?php $this->export_form( 'vatright_export_intrastat', $period, __( 'Download INTRASTAT CSV', 'vatright' ), $year, $month ); ?>
 			<?php endif; ?>
+
+			<h2><?php esc_html_e( 'Order evidence', 'vatright' ); ?></h2>
+			<p><?php esc_html_e( 'One row per order with the countries, VAT number, registry result and consultation number its VAT treatment rests on.', 'vatright' ); ?></p>
+			<?php $this->export_form( 'vatright_export_orders', $period, __( 'Download order evidence CSV', 'vatright' ) ); ?>
 		</div>
 		<?php
 	}
@@ -159,6 +166,12 @@ class ReportsScreen {
 		}
 		$csv = EcSalesList::csv( $rows );
 		Csv::send( sprintf( 'ec-sales-list-%s.csv', $period->slug() ), $csv[0], $csv[1] );
+	}
+
+	public function export_orders(): void {
+		$period = $this->authorised_selection();
+		$csv    = ComplianceExport::csv( ( new ComplianceExport() )->rows_for( $period ) );
+		Csv::send( sprintf( 'order-evidence-%s.csv', $period->slug() ), $csv[0], $csv[1] );
 	}
 
 	public function export_intrastat(): void {
@@ -349,6 +362,7 @@ class ReportsScreen {
 	 */
 	private function oss_table( array $oss ): void {
 		?>
+		<div style="overflow-x:auto">
 		<table class="widefat striped">
 			<thead>
 				<tr>
@@ -374,6 +388,7 @@ class ReportsScreen {
 				<?php endif; ?>
 			</tbody>
 		</table>
+		</div>
 		<?php foreach ( $oss['rates'] as $rate ) : ?>
 			<?php if ( 'EUR' !== $rate['currency'] ) : ?>
 				<p class="description">
@@ -395,6 +410,7 @@ class ReportsScreen {
 		<?php if ( array() !== $oss['needs_correction'] ) : ?>
 			<h3><?php echo esc_html( OssReport::needs_correction_title() ); ?></h3>
 			<p><?php esc_html_e( 'Your tax tables had no rate for these destinations, so checkout charged your own country\'s rate. That VAT is not the destination VAT these sales owe, so they are left out of the figures above. Decide with your adviser how to declare each one, then add the missing rates.', 'vatright' ); ?></p>
+			<div style="overflow-x:auto">
 			<table class="widefat striped">
 				<thead>
 					<tr>
@@ -426,6 +442,7 @@ class ReportsScreen {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
+			</div>
 		<?php endif; ?>
 		<?php if ( array() !== $oss['corrections'] ) : ?>
 			<p><?php esc_html_e( 'Refunds booked in this period against earlier periods are listed in the CSV so those returns can be amended.', 'vatright' ); ?></p>
@@ -452,6 +469,7 @@ class ReportsScreen {
 				<?php endforeach; ?>
 			</p></div>
 		<?php endif; ?>
+		<div style="overflow-x:auto">
 		<table class="widefat striped vatright-intrastat">
 			<thead>
 				<tr>
@@ -479,6 +497,7 @@ class ReportsScreen {
 				<?php endif; ?>
 			</tbody>
 		</table>
+		</div>
 		<?php
 	}
 

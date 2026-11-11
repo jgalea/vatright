@@ -10,7 +10,8 @@ namespace Vatright\Registry;
  * counts as "and". The names match when what is left is equal, or when all the
  * words of one are among the words of the other, so "NV Anheuser-Busch InBev"
  * matches "Anheuser-Busch InBev" and a trade name prefix matches the full
- * name. A refused order is a lost sale, so every doubt is a match: a registry
+ * name, unless the shared words are all generic ("Trading", "Group"). A
+ * refused order is a lost sale, so every doubt is a match: a registry
  * name that is empty, a placeholder or only a legal form, a typed name that
  * is only a legal form, and a pair where only one side is in a script this
  * can't fold (Cyrillic, Greek) all match.
@@ -154,6 +155,41 @@ final class CompanyName {
 		'societate pe actiuni',
 	);
 
+	const GENERIC_WORDS = array(
+		'trading',
+		'trade',
+		'group',
+		'holding',
+		'holdings',
+		'services',
+		'service',
+		'solutions',
+		'company',
+		'co',
+		'international',
+		'intl',
+		'consulting',
+		'consultancy',
+		'management',
+		'global',
+		'europe',
+		'european',
+		'shop',
+		'store',
+		'online',
+		'digital',
+		'media',
+		'technologies',
+		'technology',
+		'tech',
+		'systems',
+		'enterprises',
+		'partners',
+		'industries',
+		'ventures',
+		'the',
+	);
+
 	const PLACEHOLDERS = array( 'na', 'n a', 'none', 'null', 'nil', 'unknown', 'not available', 'not provided', 'nicht verfugbar', 'no disponible', 'non disponible', 'x', 'xx', 'xxx' );
 
 	const CONNECTORS = array( 'and', 'und', 'et', 'och', 'og', 'en', 'y', 'e' );
@@ -288,7 +324,7 @@ final class CompanyName {
 					if ( array() === $a || array() === $b ) {
 						return true;
 					}
-					if ( implode( '', $a ) === implode( '', $b ) || array() === array_diff( $a, $b ) || array() === array_diff( $b, $a ) ) {
+					if ( implode( '', $a ) === implode( '', $b ) || ( array() === array_diff( $a, $b ) && self::is_distinctive( $a ) ) || ( array() === array_diff( $b, $a ) && self::is_distinctive( $b ) ) ) {
 						return true;
 					}
 				}
@@ -354,6 +390,13 @@ final class CompanyName {
 	private static function fold( string $name, bool $expanded = false ): string {
 		$lower = mb_strtolower( trim( $name ), 'UTF-8' );
 		return strtr( $expanded ? strtr( $lower, self::EXPAND ) : $lower, self::FOLD );
+	}
+
+	/**
+	 * @param string[] $words
+	 */
+	private static function is_distinctive( array $words ): bool {
+		return array() !== array_diff( $words, self::GENERIC_WORDS );
 	}
 
 	private static function has_unfoldable( string $folded ): bool {

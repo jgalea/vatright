@@ -123,7 +123,7 @@ class OrderSteering {
 		);
 		$rates    = (array) WC_Tax::find_rates( array_merge( $location, array( 'tax_class' => $class ) ) );
 
-		list( $found, $missing ) = TaxLocation::line_rates( $line, $class, $location, $this->calculating['customer'], $rates );
+		list( $found, $missing ) = TaxLocation::line_rates( $decision, $line, $class, $location, $this->calculating['customer'], $rates );
 		if ( $missing ) {
 			$this->calculating['missing'] = true;
 		}

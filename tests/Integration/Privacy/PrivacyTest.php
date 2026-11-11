@@ -276,4 +276,13 @@ class PrivacyTest extends PrivacyTestCase {
 		$this->assertNull( $this->cache->get( $number, $eu ) );
 		$this->assertNull( $this->cache->get( $number, $gb ) );
 	}
+
+	public function test_erase_scrubs_the_number_from_a_subscription(): void {
+		$sub = $this->as_subscription( $this->vat_order( $this->year() - 11 ), 'active' );
+
+		$this->privacy->erase( self::EMAIL );
+
+		$this->assertNull( $this->record( $sub->get_id() )['vat_number'] );
+		$this->assertSame( '', (string) wc_get_order( $sub->get_id() )->get_meta( '_vatright_number' ) );
+	}
 }

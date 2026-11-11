@@ -15,6 +15,7 @@ class LookupThrottleTest extends IntegrationTestCase {
 		// The e2e mu-plugin, mounted in this environment too, raises the caps under test.
 		remove_all_filters( 'vatright_client_lookup_limit' );
 		remove_all_filters( 'vatright_global_lookup_limit' );
+		remove_all_filters( 'vatright_global_free_lookup_limit' );
 		$this->throttle         = new LookupThrottle();
 		$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
 	}
@@ -53,7 +54,7 @@ class LookupThrottleTest extends IntegrationTestCase {
 		);
 		$allowed = 0;
 		foreach ( range( 1, 5 ) as $host ) {
-			$_SERVER['REMOTE_ADDR'] = '203.0.113.' . $host;
+			$_SERVER['REMOTE_ADDR'] = '203.0.' . $host . '.1';
 			$allowed               += $this->allowed( 10 );
 		}
 		$this->assertSame( 25, $allowed );
@@ -61,8 +62,8 @@ class LookupThrottleTest extends IntegrationTestCase {
 
 	public function test_default_global_cap_is_three_hundred_an_hour() {
 		$allowed = 0;
-		foreach ( range( 1, 40 ) as $host ) {
-			$_SERVER['REMOTE_ADDR'] = '198.51.100.' . $host;
+		foreach ( range( 1, 60 ) as $host ) {
+			$_SERVER['REMOTE_ADDR'] = '198.51.' . $host . '.1';
 			$allowed               += $this->allowed( 10 );
 		}
 		$this->assertSame( 300, $allowed );
@@ -87,14 +88,14 @@ class LookupThrottleTest extends IntegrationTestCase {
 		$this->assertSame( 10, $this->allowed( 15 ) );
 	}
 
-	public function test_an_ipv6_client_is_its_56_allocation() {
+	public function test_an_ipv6_client_is_its_48_allocation() {
 		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:200::1';
 		$this->assertSame( 10, $this->allowed( 10 ) );
 
-		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2ff:ffff::9';
-		$this->assertSame( 0, $this->allowed( 1 ), 'Same /56, same allowance.' );
+		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:300:ffff::9';
+		$this->assertSame( 0, $this->allowed( 1 ), 'Same /48, same allowance.' );
 
-		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:300::1';
+		$_SERVER['REMOTE_ADDR'] = '2001:db8:2:200::1';
 		$this->assertSame( 1, $this->allowed( 1 ) );
 	}
 
@@ -132,7 +133,7 @@ class LookupThrottleTest extends IntegrationTestCase {
 			}
 		);
 		foreach ( range( 1, 6 ) as $host ) {
-			$_SERVER['REMOTE_ADDR'] = '198.51.100.' . $host;
+			$_SERVER['REMOTE_ADDR'] = '198.51.' . $host . '.1';
 			$this->allowed( 1, 'update' );
 		}
 		$this->assertSame( 0, $this->allowed( 1, 'update' ) );
@@ -185,7 +186,7 @@ class LookupThrottleTest extends IntegrationTestCase {
 		$before = $count();
 
 		foreach ( range( 1, 50 ) as $host ) {
-			$_SERVER['REMOTE_ADDR'] = '198.51.100.' . $host;
+			$_SERVER['REMOTE_ADDR'] = '198.51.' . $host . '.1';
 			$this->assertSame( 0, $this->allowed( 1 ) );
 		}
 
@@ -193,6 +194,6 @@ class LookupThrottleTest extends IntegrationTestCase {
 
 		remove_all_filters( 'vatright_global_lookup_limit' );
 		$this->assertSame( 1, $this->allowed( 1 ) );
-		$this->assertSame( $before + 4, $count(), 'An allowed lookup writes its client and global counters (value and timeout rows), so the count above can move.' );
+		$this->assertSame( $before + 8, $count(), 'An allowed first lookup writes its client, reserve and free-allowance counters (value and timeout rows), so the count above can move.' );
 	}
 }

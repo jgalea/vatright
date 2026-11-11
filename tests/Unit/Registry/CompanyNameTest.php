@@ -222,4 +222,14 @@ class CompanyNameTest extends TestCase {
 			$this->assertTrue( CompanyName::matches( 'Totally Different Bakery', $name ), $number );
 		}
 	}
+
+	public function test_one_generic_word_does_not_match_a_longer_registered_name(): void {
+		$this->assertFalse( CompanyName::matches( 'Trading', 'Acme Trading Ltd' ) );
+		$this->assertFalse( CompanyName::matches( 'Group Services', 'Northwind Group Services GmbH' ) );
+	}
+
+	public function test_a_distinctive_word_still_matches_a_longer_registered_name(): void {
+		$this->assertTrue( CompanyName::matches( 'Acme', 'Acme Trading Ltd' ) );
+		$this->assertTrue( CompanyName::matches( 'Acme Trading', 'Acme Trading Ltd' ) );
+	}
 }

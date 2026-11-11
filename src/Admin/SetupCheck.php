@@ -94,6 +94,34 @@ class SetupCheck {
 			);
 		}
 
+		$no_rows = array_diff( Settings::get()->non_eu_registrations(), $this->countries_with_rows() );
+		if ( $no_rows ) {
+			$issues[] = $this->issue(
+				'non_eu_rates_missing',
+				self::ERROR,
+				sprintf(
+					/* translators: %s: comma-separated country codes. */
+					__( 'The store is marked as registered for VAT in %s, but your tax tables have no rate for it, so sales there are charged no VAT. Add the rate.', 'vatright' ),
+					implode( ', ', $no_rows )
+				),
+				$tax
+			);
+		}
+
+		$ignored = $this->non_eu_rows_not_registered();
+		if ( $ignored ) {
+			$issues[] = $this->issue(
+				'non_eu_rates_not_registered',
+				self::WARNING,
+				sprintf(
+					/* translators: %s: comma-separated country codes. */
+					__( 'Your tax tables have rates for %s, but the store is not marked as registered for VAT there, so sales to these countries are charged no VAT. Mark the store as registered under Tax treatment if you are.', 'vatright' ),
+					implode( ', ', $ignored )
+				),
+				SettingsSection::url()
+			);
+		}
+
 		if ( $this->has_wildcard_rate() ) {
 			$issues[] = $this->issue( 'wildcard_rate_taxes_exports', self::ERROR, __( 'A tax rate applies to every country (*). It would charge VAT on sales outside the EU.', 'vatright' ), admin_url( 'admin.php?page=wc-settings&tab=tax&section=standard' ) );
 		}
@@ -104,6 +132,11 @@ class SetupCheck {
 
 		if ( ! in_array( get_option( 'woocommerce_default_customer_address' ), array( 'geolocation', 'geolocation_ajax' ), true ) ) {
 			$issues[] = $this->issue( 'geolocation_disabled', self::WARNING, __( 'Geolocation is off, so digital sales have one piece of location evidence fewer.', 'vatright' ), admin_url( 'admin.php?page=wc-settings&tab=general' ) );
+		}
+
+		$settings = Settings::get();
+		if ( $settings->self_certification() && ! $settings->self_certification_required() ) {
+			$issues[] = $this->issue( 'self_certification_optional', self::INFO, __( 'Customers whose location evidence conflicts are asked to confirm their country, but checkout does not wait for the answer. Turn on "Require confirmation" to hold the order until they do.', 'vatright' ), SettingsSection::url() );
 		}
 
 		$down = $include_registry_status ? $this->vies_unavailable_countries() : array();
@@ -192,6 +225,27 @@ class SetupCheck {
 			}
 		}
 		return $labels;
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private function non_eu_rows_not_registered(): array {
+		$unregistered = array_diff( Settings::NON_EU_REGISTRATIONS, Settings::get()->non_eu_registrations() );
+		return array_values( array_intersect( $unregistered, $this->countries_with_rows() ) );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private function countries_with_rows(): array {
+		$with_rows = array();
+		foreach ( array_merge( array( '' ), WC_Tax::get_tax_class_slugs() ) as $class ) {
+			foreach ( (array) WC_Tax::get_rates_for_tax_class( $class ) as $rate ) {
+				$with_rows[ $rate->tax_rate_country ] = true;
+			}
+		}
+		return array_keys( $with_rows );
 	}
 
 	private function has_wildcard_rate(): bool {

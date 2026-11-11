@@ -186,6 +186,22 @@ class RevalidationTest extends LifecycleTestCase {
 		$this->assertCount( 1, $this->mails );
 	}
 
+	public function test_held_emails_go_out_only_when_the_batch_asks_for_them() {
+		$order = $this->pending_order( 'exempt_pending' );
+		$this->registry_invalid();
+		$revalid = $this->revalidation();
+
+		$this->assertSame( Revalidation::INVALID, $revalid->recheck( $order, 'admin', 5, true ) );
+		$this->assertSame( array(), $this->mails, 'Nothing is sent while the batch is still running' );
+
+		$revalid->send_held_emails();
+		$this->assertCount( 1, $this->mails );
+		$this->assertStringContainsString( 'not charged', $this->mails[0]['message'] );
+
+		$revalid->send_held_emails();
+		$this->assertCount( 1, $this->mails, 'A held email is sent once' );
+	}
+
 	public function test_recheck_bypasses_the_validation_cache() {
 		$order = $this->pending_order( 'exempt_pending' );
 		$this->registry_valid();

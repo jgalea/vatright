@@ -24,6 +24,18 @@ class RetentionTest extends PrivacyTestCase {
 		$this->assertSame( '', (string) wc_get_order( $recent->get_id() )->get_meta( Retention::SCRUBBED_META ) );
 	}
 
+	public function test_retention_job_scrubs_an_ended_subscription_but_not_a_live_one(): void {
+		$ended = $this->as_subscription( $this->vat_order( $this->year() - 11 ), 'cancelled' );
+		$live  = $this->as_subscription( $this->vat_order( $this->year() - 11 ), 'active' );
+		$this->assertSame( 'shop_subscription', $ended->get_type() );
+
+		( new Retention() )->run_batch( 0 );
+
+		$this->assertNull( $this->record( $ended->get_id() )['vat_number'] );
+		$this->assertSame( '', (string) wc_get_order( $ended->get_id() )->get_meta( '_vatright_number' ) );
+		$this->assertNotNull( $this->record( $live->get_id() )['vat_number'] );
+	}
+
 	public function test_retention_job_leaves_old_orders_without_a_decision_record_alone(): void {
 		$order = $this->order( 'DE', 'DE', '10115', array( 'digital' ) );
 		$order->set_date_created( strtotime( ( $this->year() - 11 ) . '-06-01 10:00:00 UTC' ) );
@@ -58,6 +70,16 @@ class RetentionTest extends PrivacyTestCase {
 		( new Retention() )->run_batch( 0 );
 
 		$this->assertFalse( wc_get_order( $order->get_id() )->meta_exists( LegacyData::IMPORTED_META ) );
+	}
+
+	public function test_scrub_removes_the_block_checkout_copy_of_the_number(): void {
+		$order = $this->vat_order( $this->year() - 11 );
+		$order->update_meta_data( '_wc_other/vatright/vat-number', 'DE123456789' );
+		$order->save();
+
+		( new Retention() )->run_batch( 0 );
+
+		$this->assertSame( '', (string) wc_get_order( $order->get_id() )->get_meta( '_wc_other/vatright/vat-number' ) );
 	}
 
 	public function test_an_order_only_another_plugin_numbered_holds_personal_data(): void {
