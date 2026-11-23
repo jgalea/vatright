@@ -5,7 +5,7 @@ Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.1.8
+Stable tag: 0.1.9
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -126,7 +126,8 @@ VAT Right is a tool, not tax advice. You, the store owner, are responsible for y
 
 == Changelog ==
 
-= Unreleased =
+= 0.1.9 =
+* Fix: an order's VAT ledger keeps the tax rates and the shipping treatment it was first booked with, so changing a tax rate or the "Registered for VAT in" setting later doesn't change how earlier orders appear in the OSS return and EC Sales List.
 * New: "Registered for VAT in" setting for the United Kingdom, Norway and Switzerland. Once a country is ticked, sales to consumers there are charged the rates in your tax tables for that country, and a customer with a valid VAT number from it isn't charged. Stores that don't tick a country keep charging exactly what they charged before. The setup check reports a ticked country that has no tax rate row.
 * New: "No VAT-chargeable sales to" setting stops checkout when the cart holds a product VAT would be charged on in a country you pick; other products stay purchasable.
 * New: order evidence CSV on the EU VAT reports screen, with the countries, VAT number, registry result and consultation number for each order. It reads orders a page at a time and streams the file.
