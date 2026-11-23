@@ -19,6 +19,7 @@ class LedgerWriter {
 
 	const DECISION_META = '_vatright_decision';
 	const FX_META       = '_vatright_fx';
+	const RATES_META    = '_vatright_rate_countries';
 	const FX_RETRY_HOOK = 'vatright_ledger_fx_retry';
 	const AS_GROUP      = 'vatright';
 
@@ -206,6 +207,7 @@ class LedgerWriter {
 		$shipping = (string) ( $data['customer']['shipping']['country'] ?? '' );
 		$reverse  = array( Scheme::REVERSE_CHARGE_SERVICES, Scheme::INTRA_EU_GOODS );
 		$fallback = in_array( TaxLocation::MISSING_FLAG, $decision->flags(), true );
+		$charged  = $fallback ? $this->rate_countries( $order, $buckets ) : array();
 
 		foreach ( $buckets as $bucket ) {
 			$line     = $bucket['line'];
@@ -234,7 +236,7 @@ class LedgerWriter {
 					'eur_rate'          => $fx,
 					'net_eur'           => null === $fx ? null : round( $bucket['net'] / $fx, 4 ),
 					'vat_eur'           => null === $fx ? null : round( $bucket['vat'] / $fx, 4 ),
-					'rate_missing'      => $fallback && null !== $line && self::charged_elsewhere( $bucket['rate_id'], $line->tax_country() ) ? 1 : 0,
+					'rate_missing'      => $fallback && null !== $line && self::charged_elsewhere( $charged, $bucket['rate_id'], $line->tax_country() ) ? 1 : 0,
 					'supply_at'         => $at->format( 'Y-m-d H:i:s' ),
 					'period'            => $period,
 					'relates_to_period' => $relates_to,
@@ -248,13 +250,39 @@ class LedgerWriter {
 	 * Whether the VAT on a row was charged at a rate of another country than
 	 * the line's tax country: the store's rate, charged because the tax tables
 	 * had no rate for the destination.
+	 *
+	 * @param array<int,string|null> $charged
 	 */
-	private static function charged_elsewhere( int $rate_id, string $tax_country ): bool {
-		if ( 0 === $rate_id ) {
-			return false;
+	private static function charged_elsewhere( array $charged, int $rate_id, string $tax_country ): bool {
+		return 0 !== $rate_id && isset( $charged[ $rate_id ] ) && $charged[ $rate_id ] !== $tax_country;
+	}
+
+	/**
+	 * The country of each tax rate the order was charged at, fixed on the first
+	 * ledger write so editing or deleting a rate later doesn't change how the
+	 * order reports. A rate that no longer existed by then maps to null.
+	 *
+	 * @param array<string,array{rate_id:int}> $buckets
+	 * @return array<int,string|null>
+	 */
+	private function rate_countries( WC_Order $order, array $buckets ): array {
+		$stored  = $order->get_meta( self::RATES_META );
+		$charged = is_array( $stored ) ? $stored : array();
+		$added   = false;
+		foreach ( $buckets as $bucket ) {
+			$rate_id = (int) $bucket['rate_id'];
+			if ( 0 === $rate_id || array_key_exists( $rate_id, $charged ) ) {
+				continue;
+			}
+			$rate                = WC_Tax::_get_tax_rate( $rate_id );
+			$charged[ $rate_id ] = is_array( $rate ) ? strtoupper( (string) $rate['tax_rate_country'] ) : null;
+			$added               = true;
 		}
-		$rate = WC_Tax::_get_tax_rate( $rate_id );
-		return is_array( $rate ) && strtoupper( (string) $rate['tax_rate_country'] ) !== $tax_country;
+		if ( $added ) {
+			$order->update_meta_data( self::RATES_META, $charged );
+			$order->save_meta_data();
+		}
+		return $charged;
 	}
 
 	/**

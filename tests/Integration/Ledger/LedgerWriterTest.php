@@ -8,6 +8,7 @@ use Vatright\Domain\Rule;
 use Vatright\Domain\Scheme;
 use Vatright\Ledger\LedgerWriter;
 use WC_Order;
+use WC_Tax;
 
 require_once __DIR__ . '/LedgerTestCase.php';
 
@@ -156,6 +157,41 @@ class LedgerWriterTest extends LedgerTestCase {
 			),
 			$marked
 		);
+	}
+
+	public function test_rate_missing_keeps_the_rate_country_from_the_first_write(): void {
+		$mt       = $this->tax_rate( 'MT', '18' );
+		$order    = $this->make_order(
+			array(
+				'items' => array(
+					array(
+						'name'    => 'Book',
+						'net'     => 100,
+						'rate_id' => $mt,
+						'percent' => 18.0,
+					),
+				),
+			)
+		);
+		$decision = $this->seed_decision(
+			$order,
+			Scheme::OSS_DESTINATION,
+			Rule::B2C_DESTINATION,
+			array( 'Book' => array( 'goods', 'IT', Scheme::OSS_DESTINATION ) )
+		);
+		$order->update_meta_data( LedgerWriter::DECISION_META, wp_json_encode( $decision->with_flag( TaxLocation::MISSING_FLAG )->to_array() ) );
+		$order->save_meta_data();
+
+		$this->writer->record_order( $order );
+		$this->assertSame( array( '1' ), array_column( $this->ledger_rows(), 'rate_missing' ) );
+
+		WC_Tax::_update_tax_rate( $mt, array( 'tax_rate_country' => 'IT' ) );
+		$this->writer->record_order( wc_get_order( $order->get_id() ) );
+		$this->assertSame( array( '1' ), array_column( $this->ledger_rows(), 'rate_missing' ), 'Editing the rate later leaves the order as it was charged.' );
+
+		WC_Tax::_delete_tax_rate( $mt );
+		$this->writer->record_order( wc_get_order( $order->get_id() ) );
+		$this->assertSame( array( '1' ), array_column( $this->ledger_rows(), 'rate_missing' ), 'Deleting the rate later leaves the order as it was charged.' );
 	}
 
 	public function test_record_is_idempotent(): void {
