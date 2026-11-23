@@ -7,6 +7,7 @@ use Vatright\Checkout\TaxLocation;
 use Vatright\Domain\Rule;
 use Vatright\Domain\Scheme;
 use Vatright\Ledger\LedgerWriter;
+use Vatright\Settings;
 use WC_Order;
 use WC_Tax;
 
@@ -192,6 +193,63 @@ class LedgerWriterTest extends LedgerTestCase {
 		WC_Tax::_delete_tax_rate( $mt );
 		$this->writer->record_order( wc_get_order( $order->get_id() ) );
 		$this->assertSame( array( '1' ), array_column( $this->ledger_rows(), 'rate_missing' ), 'Deleting the rate later leaves the order as it was charged.' );
+	}
+
+	public function test_shipping_keeps_the_line_it_followed_at_the_first_write(): void {
+		$gb    = $this->tax_rate( 'GB', '20' );
+		$de    = $this->tax_rate( 'DE', '19' );
+		$order = $this->make_order(
+			array(
+				'items'    => array(
+					array(
+						'name'    => 'Book',
+						'net'     => 100,
+						'rate_id' => $gb,
+						'percent' => 20.0,
+					),
+					array(
+						'name'    => 'Pen',
+						'net'     => 10,
+						'rate_id' => $de,
+						'percent' => 19.0,
+					),
+				),
+				'shipping' => array(
+					array(
+						'name'    => 'Post',
+						'net'     => 5,
+						'rate_id' => $gb,
+						'percent' => 20.0,
+					),
+				),
+			)
+		);
+		$this->seed_decision(
+			$order,
+			Scheme::OSS_DESTINATION,
+			Rule::B2C_DESTINATION,
+			array(
+				'Book' => array( 'goods', 'GB', Scheme::EXPORT ),
+				'Pen'  => array( 'goods', 'DE', Scheme::OSS_DESTINATION ),
+			)
+		);
+		$gb_net = function (): float {
+			return array_sum( array_map( 'floatval', array_column( $this->ledger_rows( "place_of_supply = 'GB'" ), 'net' ) ) );
+		};
+
+		try {
+			update_option( Settings::OPTION, array( 'non_eu_registrations' => array( 'GB' ) ) );
+			Settings::reset();
+			$this->writer->record_order( $order );
+			$this->assertSame( 105.0, $gb_net(), 'Registered in GB: shipping follows the GB goods.' );
+
+			update_option( Settings::OPTION, array( 'non_eu_registrations' => array() ) );
+			Settings::reset();
+			$this->writer->record_order( wc_get_order( $order->get_id() ) );
+			$this->assertSame( 105.0, $gb_net(), 'Changing the registrations later leaves the shipping where it was booked.' );
+		} finally {
+			Settings::reset();
+		}
 	}
 
 	public function test_record_is_idempotent(): void {

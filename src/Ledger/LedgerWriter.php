@@ -8,6 +8,7 @@ use Vatright\Checkout\InputGatherer;
 use Vatright\Checkout\TaxLocation;
 use Vatright\Domain\Decision;
 use Vatright\Domain\Line;
+use Vatright\Domain\LineDecision;
 use Vatright\Domain\Scheme;
 use Vatright\Orders\DecisionStore;
 use WC_Abstract_Order;
@@ -20,6 +21,7 @@ class LedgerWriter {
 	const DECISION_META = '_vatright_decision';
 	const FX_META       = '_vatright_fx';
 	const RATES_META    = '_vatright_rate_countries';
+	const SHIPPING_META = '_vatright_shipping_line';
 	const FX_RETRY_HOOK = 'vatright_ledger_fx_retry';
 	const AS_GROUP      = 'vatright';
 
@@ -138,7 +140,7 @@ class LedgerWriter {
 			$original = $source === $order ? $item : $order->get_item( (int) $item->get_meta( '_refunded_item_id' ), false );
 			$cart_key = $original ? (string) $original->get_meta( InputGatherer::LINE_KEY_META ) : '';
 			$line_key = '' !== $cart_key ? $cart_key : (string) ( $original ? $original->get_id() : (int) $item->get_meta( '_refunded_item_id' ) );
-			$follows  = $item instanceof \WC_Order_Item_Shipping ? TaxLocation::shipping_line( $decision ) : null;
+			$follows  = $item instanceof \WC_Order_Item_Shipping ? $this->shipping_line( $order, $decision ) : null;
 			$line     = $decision->line( $line_key ) ?? $follows ?? ( $decision->lines()[0] ?? null );
 			$taxes    = array_filter(
 				(array) ( $item->get_taxes()['total'] ?? array() ),
@@ -255,6 +257,29 @@ class LedgerWriter {
 	 */
 	private static function charged_elsewhere( array $charged, int $rate_id, string $tax_country ): bool {
 		return 0 !== $rate_id && isset( $charged[ $rate_id ] ) && $charged[ $rate_id ] !== $tax_country;
+	}
+
+	/**
+	 * The line shipping follows, fixed per decision on the first ledger write:
+	 * which line that is depends on the non-EU registrations setting, and a
+	 * later change to it mustn't move the shipping of a booked order.
+	 */
+	private function shipping_line( WC_Order $order, Decision $decision ): ?LineDecision {
+		$id     = (string) ( $decision->to_array()['id'] ?? '' );
+		$stored = $order->get_meta( self::SHIPPING_META );
+		if ( is_array( $stored ) && ( $stored['decision'] ?? null ) === $id && array_key_exists( 'line', $stored ) ) {
+			return null === $stored['line'] ? null : $decision->line( (string) $stored['line'] );
+		}
+		$line = TaxLocation::shipping_line( $decision );
+		$order->update_meta_data(
+			self::SHIPPING_META,
+			array(
+				'decision' => $id,
+				'line'     => null === $line ? null : $line->key(),
+			)
+		);
+		$order->save_meta_data();
+		return $line;
 	}
 
 	/**
