@@ -90,11 +90,15 @@ test( 'a country whose registry gives no name verdict is never refused', async (
 	expect( orderRecord( orderIdFromUrl( page.url() ) ).exempt ).toBe( 'yes' );
 } );
 
-test( 'an order with no company name is not refused', async ( { page } ) => {
+test( 'an order with no company name is refused while the registry returns one', async ( { page } ) => {
 	await classicCheckout( page, '' );
+	const before = orderCount();
+
 	await classic.placeOrder( page );
-	await page.waitForURL( /order-received/ );
-	expect( orderRecord( orderIdFromUrl( page.url() ) ).exempt ).toBe( 'yes' );
+
+	await expect( page.getByRole( 'alert' ).filter( { hasText: REFUSAL } ) ).toBeVisible();
+	expect( page.url() ).not.toContain( 'order-received' );
+	expect( orderCount() ).toBe( before );
 } );
 
 test( 'with the setting off the same mismatch places the order on the classic checkout', async ( { page } ) => {

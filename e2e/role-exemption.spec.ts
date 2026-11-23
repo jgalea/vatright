@@ -1,7 +1,29 @@
 import { test, expect, type Page } from '@playwright/test';
 import { fillCustomer as fillBlock, placeOrder as placeBlock } from './block-flow';
 import { fillCustomer as fillClassic, openCheckout as openClassic, placeOrder as placeClassic, taxRow } from './classic-flow';
-import { PRODUCTS, addToCart, orderIdFromUrl, orderRecord, resetState, setSettings } from './helpers';
+import { PRODUCTS, addToCart, orderIdFromUrl, orderRecord, resetState, setSettings, wp } from './helpers';
+
+// The role new sign-ups get is never exempt while sign-up is open, so these
+// tests run with every sign-up path closed.
+const SIGNUP_OPTIONS: Record< string, string > = {
+	users_can_register: '0',
+	woocommerce_enable_myaccount_registration: 'no',
+	woocommerce_enable_signup_and_login_from_checkout: 'no',
+};
+const previousSignup: Record< string, string > = {};
+
+test.beforeAll( () => {
+	for ( const [ option, value ] of Object.entries( SIGNUP_OPTIONS ) ) {
+		previousSignup[ option ] = wp( 'option', 'get', option ).trim();
+		wp( 'option', 'update', option, value );
+	}
+} );
+
+test.afterAll( () => {
+	for ( const [ option, value ] of Object.entries( previousSignup ) ) {
+		wp( 'option', 'update', option, value );
+	}
+} );
 
 async function signIn( page: Page, login: string, pass: string, path: string ) {
 	await page.goto( path );
